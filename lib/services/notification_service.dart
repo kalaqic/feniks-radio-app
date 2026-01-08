@@ -1,0 +1,64 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart' as tz;
+
+final navigatorKey = GlobalKey<NavigatorState>();
+
+class NotificationService {
+  NotificationService._();
+  static final instance = NotificationService._();
+  final _plugin = FlutterLocalNotificationsPlugin();
+
+  Future<void> init() async {
+    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const ios = DarwinInitializationSettings();
+    const macOS = DarwinInitializationSettings();
+    const init = InitializationSettings(
+      android: android, 
+      iOS: ios, 
+      macOS: macOS,
+    );
+
+    await _plugin.initialize(
+      init,
+      onDidReceiveNotificationResponse: (resp) {
+        // Navigate to good news screen when user taps notification
+        navigatorKey.currentState?.pushNamed('/good-news');
+      },
+    );
+  }
+
+  Future<void> scheduleDailyGoodNews({required int hour, required int minute}) async {
+    await _plugin.cancel(1001); // replace existing
+
+    const androidDetails = AndroidNotificationDetails(
+      'feniks_daily',
+      'Daily Good News',
+      channelDescription: 'Dnevna notifikacija sa lijepom viješću',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+    const iosDetails = DarwinNotificationDetails();
+
+    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+
+    final location = tz.getLocation(tz.local.name);
+    final now = tz.TZDateTime.now(location);
+    var scheduled = tz.TZDateTime(location, now.year, now.month, now.day, hour, minute);
+    if (scheduled.isBefore(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+
+    await _plugin.zonedSchedule(
+      1001,
+      'Lijepa vijest dana',
+      'Tap da pročitaš i upališ radio',
+      scheduled,
+      details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time,
+      payload: 'good_news',
+    );
+  }
+}
