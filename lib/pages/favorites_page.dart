@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/radio_player_model.dart';
+import '../services/auth_service.dart';
+import '../widgets/login_required_dialog.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../widgets/common_footer.dart';
@@ -206,7 +208,14 @@ class _FavoritesPageState extends State<FavoritesPage> {
                         color: Colors.transparent,
                         child: InkWell(
                           borderRadius: BorderRadius.circular(20),
-                          onTap: () => _removeFavorite(song, model),
+                          onTap: () {
+                            final authService = context.read<AuthService>();
+                            if (!authService.isAuthenticated) {
+                              LoginRequiredDialog.show(context, 'brisanje omiljenih pjesama');
+                              return;
+                            }
+                            _removeFavorite(song, model);
+                          },
                           child: Icon(
                             Icons.favorite,
                             color: Colors.red.shade400,
@@ -320,6 +329,12 @@ class _FavoritesPageState extends State<FavoritesPage> {
                       child: InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
+                          final authService = context.read<AuthService>();
+                          if (!authService.isAuthenticated) {
+                            Navigator.pop(context); // Close dialog first
+                            LoginRequiredDialog.show(context, 'brisanje omiljenih pjesama');
+                            return;
+                          }
                           _removeFavorite(fullSong, model);
                           Navigator.pop(context);
                         },

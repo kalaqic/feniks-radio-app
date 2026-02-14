@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "752301943254",
+    "project_id": "feniks-9cda4",
+    "storage_bucket": "feniks-9cda4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:752301943254:android:44a202ade1681dfd77dc77",
+        "android_client_info": {
+          "package_name": "com.example.feniksflutter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAH1uEPcOR95e_dNO7HQ2VAKIbTOqrg_YI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

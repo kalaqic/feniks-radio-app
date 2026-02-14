@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
+import '../models/radio_player_model.dart';
 import 'footer_button.dart';
 
 class CommonFooter extends StatelessWidget {
@@ -38,6 +40,7 @@ class CommonFooter extends StatelessWidget {
                 isDark: isDark,
                 onTap: () {
                   if (currentRoute != '/home') {
+                    context.read<RadioPlayerModel>().trackPageVisit('/home');
                     Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
                   }
                 },
@@ -49,29 +52,20 @@ class CommonFooter extends StatelessWidget {
                 isDark: isDark,
                 onTap: () {
                   if (currentRoute != '/leaderboard') {
+                    context.read<RadioPlayerModel>().trackPageVisit('/leaderboard');
                     Navigator.pushNamed(context, '/leaderboard');
                   }
                 },
               ),
               FooterButton(
-                icon: Icons.dynamic_feed_rounded,
-                label: 'Feed',
-                isActive: currentRoute == '/feed',
+                icon: Icons.person_outline_rounded,
+                label: 'Moj profil',
+                isActive: currentRoute == '/profile',
                 isDark: isDark,
                 onTap: () {
-                  if (currentRoute != '/feed') {
-                    Navigator.pushNamed(context, '/feed');
-                  }
-                },
-              ),
-              FooterButton(
-                icon: Icons.settings_outlined,
-                label: 'Postavke',
-                isActive: currentRoute == '/settings',
-                isDark: isDark,
-                onTap: () {
-                  if (currentRoute != '/settings') {
-                    Navigator.pushNamed(context, '/settings');
+                  if (currentRoute != '/profile') {
+                    context.read<RadioPlayerModel>().trackPageVisit('/profile');
+                    Navigator.pushNamed(context, '/profile');
                   }
                 },
               ),

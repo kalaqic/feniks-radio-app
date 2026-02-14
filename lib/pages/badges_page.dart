@@ -102,10 +102,21 @@ class _BadgesPageState extends State<BadgesPage> {
                   const SizedBox(height: 32),
                 ],
                 
-                // Available Badges Section
-                _buildSectionTitle('Sve Značke', allBadges.length, isDarkMode),
-                const SizedBox(height: 16),
-                _buildAllBadgesGrid(allBadges, earnedBadges, isDarkMode),
+                // All Badges by Section
+                ...model.badgesGroupedBySection.entries.map((sectionEntry) {
+                  final sectionName = sectionEntry.key;
+                  final sectionBadges = sectionEntry.value;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    key: ValueKey(sectionName),
+                    children: [
+                      _buildSectionTitle(sectionName, sectionBadges.length, isDarkMode),
+                      const SizedBox(height: 16),
+                      _buildBadgesGridWithEarned(sectionBadges, earnedBadges, isDarkMode),
+                      const SizedBox(height: 24),
+                    ],
+                  );
+                }),
                 const SizedBox(height: 120), // Space for bottom nav
               ],
             ),
@@ -234,7 +245,7 @@ class _BadgesPageState extends State<BadgesPage> {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        childAspectRatio: 0.75,
+        childAspectRatio: 0.65,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
@@ -246,22 +257,20 @@ class _BadgesPageState extends State<BadgesPage> {
     );
   }
 
-  Widget _buildAllBadgesGrid(Map<String, Map<String, dynamic>> allBadges, List<Map<String, dynamic>> earnedBadges, bool isDarkMode) {
+  Widget _buildBadgesGridWithEarned(List<Map<String, dynamic>> badges, List<Map<String, dynamic>> earnedBadges, bool isDarkMode) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        childAspectRatio: 0.75,
+        childAspectRatio: 0.65,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
-      itemCount: allBadges.length,
+      itemCount: badges.length,
       itemBuilder: (context, index) {
-        final badgeEntry = allBadges.entries.toList()[index];
-        final badge = badgeEntry.value;
+        final badge = badges[index];
         final isEarned = earnedBadges.any((earned) => earned['id'] == badge['id']);
-        
         return _buildBadgeCard(badge, isEarned, isDarkMode);
       },
     );
@@ -298,6 +307,7 @@ class _BadgesPageState extends State<BadgesPage> {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Badge icon
@@ -323,22 +333,24 @@ class _BadgesPageState extends State<BadgesPage> {
                 const SizedBox(height: 8),
                 
                 // Badge name
-                Text(
-                  badge['name'] as String,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isEarned 
-                      ? (isDarkMode ? AppTheme.textPrimary : const Color(0xFF1F2937)) 
-                      : (isDarkMode ? AppTheme.textSecondary : Colors.grey.shade500),
+                Expanded(
+                  child: Text(
+                    badge['name'] as String,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isEarned 
+                        ? (isDarkMode ? AppTheme.textPrimary : const Color(0xFF1F2937)) 
+                        : (isDarkMode ? AppTheme.textSecondary : Colors.grey.shade500),
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 
                 if (isEarned) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Icon(
                     Icons.check_circle,
                     color: badgeColor,

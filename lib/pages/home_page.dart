@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/radio_player_model.dart';
+import '../services/auth_service.dart';
+import '../services/firestore_service.dart';
 import '../widgets/currently_playing_card.dart';
 import '../widgets/header_with_volume.dart';
 import '../widgets/ether_messages_card.dart';
@@ -22,35 +24,70 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final model = context.read<RadioPlayerModel>();
-      
-      // Set up immediate achievement popup callback
-      model.onAchievementEarned = (badge) {
+      final auth = context.read<AuthService>();
+
+      // Load user data from Firestore when logged in (points, hours, achievements, etc.)
+      if (auth.isAuthenticated && auth.user != null) {
+        final data = await FirestoreService.instance.loadUserAchievements(auth.user!.uid);
         if (mounted) {
+          if (data != null) {
+            model.loadAchievementData(data);
+          } else {
+            // New user: start with clean state and save to DB
+            model.loadAchievementData({});
+            await FirestoreService.instance.saveUserAchievements(
+              auth.user!.uid,
+              model.getAchievementData(),
+            );
+          }
+          await FirestoreService.instance.updateLeaderboardEntry(
+            auth.user!.uid,
+            auth.user!.displayName ?? 'Anonim',
+            model.totalFeniksPoints,
+            model.earnedBadges.length,
+          );
+        }
+      }
+
+      // Set up achievement popup and save to Firestore when a badge is earned
+      model.onAchievementEarned = (badge) {
+        if (!mounted) return;
+        // Save immediately so the badge is persisted; then show popup
+        _saveAchievementsToFirestore().then((_) {
+          if (!mounted) return;
           showDialog(
             context: context,
             barrierDismissible: false,
-            builder: (context) => BadgeEarnedModal(
+            builder: (dialogContext) => BadgeEarnedModal(
               badge: badge,
               onDismiss: () {
-                Navigator.of(context).pop();
+                final bid = badge['id'] as String?;
+                if (bid != null) context.read<RadioPlayerModel>().markBadgeShown(bid);
+                Navigator.of(dialogContext).pop();
+                if (mounted) _saveAchievementsToFirestore();
               },
             ),
           );
-        }
+        });
       };
-      
+
+      // Save progress to Firestore when it changes (favorites, session end, etc.)
+      model.onProgressChanged = () {
+        if (mounted) _saveAchievementsToFirestore();
+      };
+
       // Check for badges first
       model.checkAndAwardBadges();
-      
+
       // Auto-play if enabled
       if (model.autoPlay) {
         Future.delayed(const Duration(milliseconds: 500), () {
           model.play();
         });
       }
-      
+
       if (model.shouldShowCelebration) {
         _showCelebrationModal();
       } else if (model.hasPendingBadges) {
@@ -80,6 +117,22 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _saveAchievementsToFirestore() async {
+    final auth = context.read<AuthService>();
+    final uid = auth.user?.uid;
+    if (uid != null) {
+      final model = context.read<RadioPlayerModel>();
+      await FirestoreService.instance.saveUserAchievements(uid, model.getAchievementData());
+      final name = auth.user?.displayName ?? 'Anonim';
+      await FirestoreService.instance.updateLeaderboardEntry(
+        uid,
+        name,
+        model.totalFeniksPoints,
+        model.earnedBadges.length,
+      );
+    }
+  }
+
   void _showBadgeEarnedModal() {
     final model = context.read<RadioPlayerModel>();
     if (!model.hasPendingBadges) return;
@@ -91,17 +144,16 @@ class _HomePageState extends State<HomePage> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => BadgeEarnedModal(
+        builder: (dialogContext) => BadgeEarnedModal(
           badge: badge,
           onDismiss: () {
-            final model = context.read<RadioPlayerModel>();
-            model.markBadgeShown(badgeId);
-            Navigator.of(context).pop();
-            
-            // Check for more pending badges
-            if (model.hasPendingBadges) {
+            final m = context.read<RadioPlayerModel>();
+            m.markBadgeShown(badgeId);
+            Navigator.of(dialogContext).pop();
+            if (mounted) _saveAchievementsToFirestore();
+            if (mounted && m.hasPendingBadges) {
               Future.delayed(const Duration(milliseconds: 500), () {
-                _showBadgeEarnedModal();
+                if (mounted) _showBadgeEarnedModal();
               });
             }
           },

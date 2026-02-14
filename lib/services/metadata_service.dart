@@ -36,39 +36,24 @@ class MetadataService {
   
   /// Fetch current song metadata from the radio stream
   Future<Map<String, String>> _fetchMetadata() async {
-    print('DEBUG: Starting metadata fetch...');
     try {
-      // 1. Try to get metadata from the API
-      print('DEBUG: Trying API metadata...');
       final apiMetadata = await _getApiMetadata();
       if (apiMetadata.isNotEmpty) {
-        print('DEBUG: Got API metadata: $apiMetadata');
         _metadataController?.add(apiMetadata);
         return apiMetadata;
       }
-      print('DEBUG: API metadata failed or empty');
-      
-      // 2. Try to get ICY metadata from the stream URL as fallback
-      print('DEBUG: Trying ICY metadata as fallback...');
       final icyMetadata = await _getIcyMetadata();
       if (icyMetadata.isNotEmpty) {
-        print('DEBUG: Got ICY metadata: $icyMetadata');
         _metadataController?.add(icyMetadata);
         return icyMetadata;
       }
-      print('DEBUG: ICY metadata failed or empty');
-      
-      // 3. Fallback to generic radio info
-      print('DEBUG: Using fallback metadata');
       final fallback = {
         'title': 'Feniks Radio',
         'artist': 'Uživo prijenos',
       };
       _metadataController?.add(fallback);
       return fallback;
-      
-    } catch (e) {
-      print('Error fetching metadata: $e');
+    } catch (_) {
       final fallback = {
         'title': 'Feniks Radio',
         'artist': 'Uživo prijenos',
@@ -99,10 +84,7 @@ class MetadataService {
           return metadata;
         }
       }
-    } catch (e) {
-      print('ICY metadata error: $e');
-    }
-    
+    } catch (_) {}
     return {};
   }
   
@@ -144,13 +126,10 @@ class MetadataService {
           break;
         }
       }
-    } catch (e) {
-      print('Error extracting ICY metadata: $e');
-    }
-    
+    } catch (_) {}
     return {};
   }
-  
+
   /// Parse ICY metadata string
   Map<String, String> _parseIcyMetadata(String metaString) {
     final result = <String, String>{};
@@ -185,7 +164,6 @@ class MetadataService {
       // Use the correct JSON status endpoint
       final endpoint = 'https://c30.radioboss.fm:8234/status-json.xsl';
       
-      print('DEBUG: Trying JSON status endpoint: $endpoint');
       final response = await http.get(
         Uri.parse(endpoint),
         headers: {
@@ -193,20 +171,15 @@ class MetadataService {
           'Accept': 'application/json',
         },
       ).timeout(const Duration(seconds: 10));
-      
-      print('DEBUG: JSON Response status: ${response.statusCode}');
-      print('DEBUG: JSON Response body: ${response.body}');
-      
+
       if (response.statusCode == 200) {
         try {
           final data = json.decode(response.body);
           final result = _parseRadioBossJson(data);
           if (result.isNotEmpty) {
-            print('DEBUG: Successfully parsed metadata: $result');
             return result;
           }
-        } catch (e) {
-          print('DEBUG: Error parsing JSON: $e');
+        } catch (_) {
           // If not JSON, try to parse as text
           final result = _parseApiText(response.body);
           if (result.isNotEmpty) {
@@ -214,10 +187,7 @@ class MetadataService {
           }
         }
       }
-    } catch (e) {
-      print('API metadata error: $e');
-    }
-    
+    } catch (_) {}
     return {};
   }
   
@@ -310,12 +280,8 @@ class MetadataService {
           result['artist'] = artist ?? '';
         }
         
-        // Log the entire structure to help debug
-        print('DEBUG: Full JSON structure: ${data.keys.toList()}');
       }
-    } catch (e) {
-      print('DEBUG: Error parsing RadioBoss JSON: $e');
-    }
+    } catch (_) {}
     
     return result;
   }

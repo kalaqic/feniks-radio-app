@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/radio_player_model.dart';
+import '../services/auth_service.dart';
+import '../services/firestore_service.dart';
 import '../widgets/common_footer.dart';
-import '../widgets/achievement_modal.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+
+const _avatars = ['🎵', '🎧', '🎼', '🎤', '🎸', '🥁', '🎹', '🎺', '🎻', '🪕'];
 
 class LeaderboardPage extends StatefulWidget {
   const LeaderboardPage({super.key});
@@ -14,45 +17,45 @@ class LeaderboardPage extends StatefulWidget {
 }
 
 class _LeaderboardPageState extends State<LeaderboardPage> {
-  // Mock leaderboard data with Feniks Points
-  final List<Map<String, dynamic>> _leaderboard = [
-    {'name': 'Marko Petrović', 'points': 2450, 'avatar': '🎵', 'rank': 1, 'badges': 8},
-    {'name': 'Ana Jovanović', 'points': 2380, 'avatar': '🎧', 'rank': 2, 'badges': 7},
-    {'name': 'Stefan Nikolić', 'points': 2250, 'avatar': '🎼', 'rank': 3, 'badges': 6},
-    {'name': 'Milica Stojanović', 'points': 2180, 'avatar': '🎤', 'rank': 4, 'badges': 5},
-    {'name': 'Nemanja Milic', 'points': 2050, 'avatar': '🎸', 'rank': 5, 'badges': 4},
-    {'name': 'Jovana Radić', 'points': 1980, 'avatar': '🥁', 'rank': 6, 'badges': 5},
-    {'name': 'Luka Maksimović', 'points': 1870, 'avatar': '🎹', 'rank': 7, 'badges': 3},
-    {'name': 'Tamara Vuković', 'points': 1750, 'avatar': '🎺', 'rank': 8, 'badges': 4},
-    {'name': 'Miloš Đurić', 'points': 1680, 'avatar': '🎻', 'rank': 9, 'badges': 3},
-    {'name': 'Jelena Stanković', 'points': 1550, 'avatar': '🪕', 'rank': 10, 'badges': 2},
-  ];
+  List<Map<String, dynamic>> _leaderboard = [];
+  int? _myRank;
+  bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    // Show achievement modal after page loads, but only first time
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final model = context.read<RadioPlayerModel>();
-      if (model.shouldShowAchievementModal) {
-        _showAchievementModal();
-      }
-    });
+    _loadLeaderboard();
   }
 
-  void _showAchievementModal() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AchievementModal(
-        percentage: '4%',
-        onDismiss: () {
-          final model = context.read<RadioPlayerModel>();
-          model.markAchievementModalShown();
-          Navigator.of(context).pop();
-        },
-      ),
-    );
+  Future<void> _loadLeaderboard() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final top = await FirestoreService.instance.getLeaderboardTop(limit: 10);
+      final auth = context.read<AuthService>();
+      final model = context.read<RadioPlayerModel>();
+      int? myRank;
+      if (auth.isAuthenticated && auth.user != null) {
+        myRank = await FirestoreService.instance.getMyRank(model.totalFeniksPoints);
+      }
+      if (mounted) {
+        setState(() {
+          _leaderboard = top;
+          _myRank = myRank;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Greška pri učitavanju. Povucite za osvježavanje.';
+        });
+      }
+    }
   }
 
   @override
@@ -90,9 +93,12 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
               ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
+          child: RefreshIndicator(
+            onRefresh: _loadLeaderboard,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 20),
@@ -108,6 +114,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                 const SizedBox(height: 120), // Space for bottom nav
               ],
             ),
+            ),
           ),
         ),
       ),
@@ -118,9 +125,9 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
   Widget _buildPersonalPointsSection(RadioPlayerModel model) {
     final themeProvider = context.watch<ThemeProvider>();
     final isDarkMode = themeProvider.isDarkMode;
-    final myRank = 4; // Mock current user rank
+    final myRank = _myRank;
     final myPoints = model.totalFeniksPoints;
-    
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -176,46 +183,46 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '#$myRank',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
+              if (myRank != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '#$myRank',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 24),
-          
-          // Points Breakdown
+          // Breakdown: badges earned, badge points, minutes listened, listening points
           Row(
             children: [
               Expanded(
                 child: _buildPointsCard(
-                  'Slušanje',
-                  '${model.listeningPoints}',
-                  Icons.headphones_rounded,
+                  'Značke (broj)',
+                  '${model.earnedBadges.length}',
+                  Icons.military_tech_rounded,
                   Colors.white.withValues(alpha: 0.9),
-                  AppTheme.primary,
+                  const Color(0xFFFFD700),
                   isDarkMode,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildPointsCard(
-                  'Poruke',
-                  '${model.messagesSent * 10}',
-                  Icons.message_rounded,
+                  'Poeni od znački',
+                  '${model.badgePoints}',
+                  Icons.star_rounded,
                   Colors.white.withValues(alpha: 0.9),
-                  AppTheme.primary,
+                  const Color(0xFFFFD700),
                   isDarkMode,
                 ),
               ),
@@ -226,22 +233,22 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
             children: [
               Expanded(
                 child: _buildPointsCard(
-                  'Značke',
-                  '${model.badgePoints}',
-                  Icons.military_tech_rounded,
+                  'Minuta slušanja',
+                  '${model.totalListeningMinutes}',
+                  Icons.headphones_rounded,
                   Colors.white.withValues(alpha: 0.9),
-                  const Color(0xFFFFD700),
+                  AppTheme.primary,
                   isDarkMode,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildPointsCard(
-                  'Poruke',
-                  '${model.messagesSent}',
-                  Icons.chat_bubble_outline_rounded,
+                  'Poeni od slušanja',
+                  '${model.listeningPoints}',
+                  Icons.graphic_eq_rounded,
                   Colors.white.withValues(alpha: 0.9),
-                  const Color(0xFF32D74B),
+                  AppTheme.primary,
                   isDarkMode,
                 ),
               ),
@@ -360,6 +367,26 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Top 10 slušalaca objavljuje se na kraju mjeseca.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDarkMode ? AppTheme.textMuted : const Color(0xFF8E8E93),
+                        fontWeight: FontWeight.w400,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Ljestvica će biti ažurirana u sljedećem ažuriranju.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDarkMode ? AppTheme.textMuted : const Color(0xFF8E8E93),
+                        fontWeight: FontWeight.w400,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -367,16 +394,50 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
           ),
           const SizedBox(height: 24),
           
-          // Top 3 Podium
-          _buildTopThreePodium(),
-          
-          const SizedBox(height: 24),
-          
-          // Rest of leaderboard (4-10)
-          ...List.generate(7, (index) {
-            final user = _leaderboard[index + 3];
-            return _buildLeaderboardItem(user, index + 3 == 0); // highlight current user if needed
-          }),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_error != null)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                _error!,
+                style: TextStyle(
+                  color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600,
+                  fontSize: 14,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            )
+          else if (_leaderboard.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Još nema podataka. Budite prvi na ljestvici!',
+                style: TextStyle(
+                  color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600,
+                  fontSize: 14,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            )
+          else ...[
+            if (_leaderboard.length >= 3) _buildTopThreePodium(),
+            if (_leaderboard.length > 3) const SizedBox(height: 24),
+            ...List.generate(
+              _leaderboard.length > 3 ? _leaderboard.length - 3 : 0,
+              (index) {
+                final user = _leaderboard[index + 3];
+                final auth = context.read<AuthService>();
+                final isCurrentUser = auth.isAuthenticated &&
+                    auth.user != null &&
+                    user['uid'] == auth.user!.uid;
+                return _buildLeaderboardItem(user, isCurrentUser);
+              },
+            ),
+          ],
         ],
       ),
     );
@@ -410,14 +471,14 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
           ),
           child: Center(
             child: Text(
-              user['avatar'],
+              _avatars[(place - 1) % _avatars.length],
               style: const TextStyle(fontSize: 24),
             ),
           ),
         ),
         const SizedBox(height: 8),
         Text(
-          user['name'].split(' ')[0], // First name only
+          ((user['name'] as String?) ?? 'Anonim').split(' ').first,
           style: const TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
@@ -519,7 +580,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
             ),
             child: Center(
               child: Text(
-                user['avatar'],
+                _avatars[(((user['rank'] as int?) ?? 1) - 1) % _avatars.length],
                 style: const TextStyle(fontSize: 20),
               ),
             ),
@@ -530,7 +591,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  user['name'],
+                  user['name'] as String? ?? 'Anonim',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,

@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../services/notification_service.dart';
-import '../widgets/common_footer.dart';
 import '../models/radio_player_model.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -37,13 +36,23 @@ class _SettingsPageState extends State<SettingsPage> {
       extendBodyBehindAppBar: true,
       backgroundColor: model.isDarkMode ? AppTheme.background : Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
+        leading: IconButton(
+          icon: Icon(
+            Icons.chevron_left_rounded,
+            color: model.isDarkMode ? Colors.white : null,
+            size: 28,
+          ),
+          onPressed: () {
+            context.read<RadioPlayerModel>().trackPageVisit('/profile');
+            Navigator.pushNamedAndRemoveUntil(context, '/profile', (route) => false);
+          },
+        ),
         title: Text(
           'Postavke',
           style: TextStyle(
             color: model.isDarkMode ? Colors.white : null,
           ),
         ),
-        automaticallyImplyLeading: false,
         backgroundColor: model.isDarkMode ? Colors.transparent : null,
         elevation: model.isDarkMode ? 0 : null,
       ),
@@ -170,13 +179,14 @@ class _SettingsPageState extends State<SettingsPage> {
                   ],
                 ),
                 
-                const SizedBox(height: 120), // Space for bottom nav
+                const SizedBox(height: 24),
+                _buildBackToProfileButton(model.isDarkMode),
+                const SizedBox(height: 40),
               ],
             ),
           ),
         ),
       ),
-      bottomNavigationBar: CommonFooter(currentRoute: '/settings', isDark: model.isDarkMode),
     );
   }
 
@@ -622,4 +632,29 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
+
+  Widget _buildBackToProfileButton(bool isDarkMode) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () {
+          context.read<RadioPlayerModel>().trackPageVisit('/profile');
+          Navigator.pushNamedAndRemoveUntil(context, '/profile', (route) => false);
+        },
+        icon: const Icon(Icons.person_outline_rounded, size: 20),
+        label: const Text('Nazad na profil'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: isDarkMode ? AppTheme.primary : AppTheme.primaryDark,
+          side: BorderSide(
+            color: isDarkMode ? AppTheme.primaryWithOpacity(0.6) : AppTheme.primary.withValues(alpha: 0.8),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
 }

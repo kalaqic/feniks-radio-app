@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 class AchievementModal extends StatefulWidget {
-  final String percentage;
+  /// Optional: show "Vi ste #rank na ljestvici!"
+  final int? rank;
+  /// Optional: show "Vi ste u top X% ..." (only used when rank is null)
+  final String? percentage;
   final VoidCallback onDismiss;
 
   const AchievementModal({
     super.key,
-    required this.percentage,
+    this.rank,
+    this.percentage,
     required this.onDismiss,
   });
 
@@ -147,7 +151,11 @@ class _AchievementModalState extends State<AchievementModal>
               
               // Achievement Text
               Text(
-                'Vi ste u top ${widget.percentage} svih Feniks Radio slušalaca!',
+                widget.rank != null
+                    ? 'Vi ste #${widget.rank} na ljestvici Feniks Radio slušalaca!'
+                    : widget.percentage != null
+                        ? 'Vi ste u top ${widget.percentage} svih Feniks Radio slušalaca!'
+                        : 'Hvala vam što ste dio naše zajednice!',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -192,7 +200,11 @@ class _AchievementModalState extends State<AchievementModal>
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Top ${widget.percentage} Slušalac',
+                      widget.rank != null
+                          ? '#${widget.rank} na ljestvici'
+                          : widget.percentage != null
+                              ? 'Top ${widget.percentage} Slušalac'
+                              : 'Feniks Slušalac',
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,

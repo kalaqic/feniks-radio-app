@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import 'dart:async';
-import '../pages/home_page.dart';
+import '../services/auth_service.dart';
 
 class LoadingScreen extends StatefulWidget {
   const LoadingScreen({super.key});
@@ -114,23 +115,14 @@ class _LoadingScreenState extends State<LoadingScreen>
       _textController.forward();
     });
 
-    // Navigate to home after 5 seconds with fade transition
+    // After 5 seconds, check auth and navigate to home (if logged in) or welcome (if not)
     _navigationTimer = Timer(const Duration(seconds: 5), () {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const HomePage(),
-            transitionDuration: const Duration(milliseconds: 1000),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(
-                opacity: animation,
-                child: child,
-              );
-            },
-          ),
-        );
-      }
+      if (!mounted) return;
+      final isLoggedIn = context.read<AuthService>().isAuthenticated;
+      Navigator.pushReplacementNamed(
+        context,
+        isLoggedIn ? '/home' : '/welcome',
+      );
     });
   }
 
@@ -148,15 +140,25 @@ class _LoadingScreenState extends State<LoadingScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: AnimatedBuilder(
-        animation: Listenable.merge([_zoomController, _spinController, _slideController, _textController]),
-        builder: (context, child) {
-          return Container(
-            width: double.infinity,
-            height: double.infinity,
-            child: Stack(
-              children: [
-                // Logo with animations - starts centered, slides left
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Background - whole PNG visible on page
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.1,
+              child: Image.asset(
+                'lib/assets/png/background_decoration.png',
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          AnimatedBuilder(
+            animation: Listenable.merge([_zoomController, _spinController, _slideController, _textController]),
+            builder: (context, child) {
+              return Stack(
+                children: [
+                  // Logo with animations - starts centered, slides left
                 Positioned(
                   left: MediaQuery.of(context).size.width / 2 - 60 + _slideAnimation.value, // Center minus half logo width
                   top: MediaQuery.of(context).size.height / 2 - 60, // Center minus half logo height
@@ -227,10 +229,11 @@ class _LoadingScreenState extends State<LoadingScreen>
                     ),
                   ),
                 ),
-              ],
-            ),
-          );
-        },
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }

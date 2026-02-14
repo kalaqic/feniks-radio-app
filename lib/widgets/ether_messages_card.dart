@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
+import '../models/radio_player_model.dart';
 
 class EtherMessagesCard extends StatelessWidget {
   const EtherMessagesCard({super.key});
@@ -31,7 +33,10 @@ class EtherMessagesCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () => Navigator.pushNamed(context, '/ether-messages'),
+          onTap: () {
+            context.read<RadioPlayerModel>().trackPageVisit('/ether-messages');
+            Navigator.pushNamed(context, '/ether-messages');
+          },
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -65,7 +70,7 @@ class EtherMessagesCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Ether Poruke',
+                          'Poruke',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
@@ -73,7 +78,7 @@ class EtherMessagesCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'Pošaljite poruke u digitalni kosmos',
+                          'Dolaze u sledećoj verziji ✨',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
@@ -90,80 +95,14 @@ class EtherMessagesCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              
-              // Description
+              const SizedBox(height: 12),
               Text(
-                'Delite svoje misli sa svetom ili zatražite omiljene pesme. Najbolje poruke će biti prikazane u feed-u.',
+                'Funkcija poruka se spremaju — vidimo se u narednoj verziji! 💜',
                 style: TextStyle(
                   fontSize: 13,
                   color: Colors.white.withValues(alpha: 0.8),
                   height: 1.4,
                 ),
-              ),
-              const SizedBox(height: 12),
-              
-              // Features
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.message_outlined,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                          SizedBox(width: 6),
-                          Text(
-                            'Poruke',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.music_note_outlined,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                          SizedBox(width: 6),
-                          Text(
-                            'Zahtevi',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
               ),
             ],
           ),

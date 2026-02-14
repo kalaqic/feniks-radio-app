@@ -3,8 +3,20 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../models/radio_player_model.dart';
+import '../services/auth_service.dart';
+import '../widgets/login_required_dialog.dart';
 import '../pages/favorites_page.dart';
 import '../utils/text_formatting.dart';
+
+String _formatDuration(Duration d) {
+  final hours = d.inHours;
+  final minutes = d.inMinutes.remainder(60);
+  final seconds = d.inSeconds.remainder(60);
+  if (hours > 0) {
+    return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+  return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+}
 
 class CurrentlyPlayingCard extends StatelessWidget {
   const CurrentlyPlayingCard({super.key, required this.model});
@@ -69,6 +81,38 @@ class CurrentlyPlayingCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 18),
+              
+              // Listening timer (when playing)
+              if (model.playing) ...[
+                Row(
+                  children: [
+                    Icon(
+                      Icons.timer_outlined,
+                      size: 16,
+                      color: isDarkMode ? AppTheme.textSecondary : const Color(0xFF6D6D70),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _formatDuration(model.currentSessionDuration),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDarkMode ? AppTheme.primary : AppTheme.primaryDark,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'slušanja',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: isDarkMode ? AppTheme.textSecondary : const Color(0xFF6D6D70),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+              ],
               
               // Song info and favorite button
               Row(
@@ -154,7 +198,15 @@ class CurrentlyPlayingCard extends StatelessWidget {
                       color: Colors.transparent,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(8),
-                        onTap: () => model.toggleFavorite(),
+                        onTap: () {
+                          final authService = context.read<AuthService>();
+                          // Allow removal without login, but require login for adding
+                          if (!model.isFavorite(model.currentSongDisplay) && !authService.isAuthenticated) {
+                            LoginRequiredDialog.show(context, 'dodavanje omiljenih pjesama');
+                            return;
+                          }
+                          model.toggleFavorite();
+                        },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           child: Row(
