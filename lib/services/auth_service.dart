@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'firestore_service.dart';
 
 class AuthService extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -42,6 +43,13 @@ class AuthService extends ChangeNotifier {
         await userCredential.user!.updateDisplayName(displayName);
         await userCredential.user!.reload();
         _user = _auth.currentUser;
+        try {
+          await FirestoreService.instance.ensureUserProfile(
+            userCredential.user!.uid,
+            displayName: displayName,
+            email: email,
+          );
+        } catch (_) {}
       }
 
       _isLoading = false;
@@ -76,6 +84,15 @@ class AuthService extends ChangeNotifier {
       );
 
       _user = _auth.currentUser;
+      if (_user != null) {
+        try {
+          await FirestoreService.instance.ensureUserProfile(
+            _user!.uid,
+            displayName: _user!.displayName,
+            email: _user!.email,
+          );
+        } catch (_) {}
+      }
       _isLoading = false;
       notifyListeners();
       return true;

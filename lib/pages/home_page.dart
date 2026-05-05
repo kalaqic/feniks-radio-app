@@ -30,24 +30,35 @@ class _HomePageState extends State<HomePage> {
 
       // Load user data from Firestore when logged in (points, hours, achievements, etc.)
       if (auth.isAuthenticated && auth.user != null) {
-        final data = await FirestoreService.instance.loadUserAchievements(auth.user!.uid);
-        if (mounted) {
-          if (data != null) {
-            model.loadAchievementData(data);
-          } else {
-            // New user: start with clean state and save to DB
-            model.loadAchievementData({});
-            await FirestoreService.instance.saveUserAchievements(
+        try {
+          await FirestoreService.instance.ensureUserProfile(
+            auth.user!.uid,
+            displayName: auth.user!.displayName,
+            email: auth.user!.email,
+          );
+          final data = await FirestoreService.instance.loadUserAchievements(
+            auth.user!.uid,
+          );
+          if (mounted) {
+            if (data != null) {
+              model.loadAchievementData(data);
+            } else {
+              // New user: start with clean state and save to DB
+              model.loadAchievementData({});
+              await FirestoreService.instance.saveUserAchievements(
+                auth.user!.uid,
+                model.getAchievementData(),
+              );
+            }
+            await FirestoreService.instance.updateLeaderboardEntry(
               auth.user!.uid,
-              model.getAchievementData(),
+              auth.user!.displayName ?? 'Anonim',
+              model.totalFeniksPoints,
+              model.earnedBadges.length,
             );
           }
-          await FirestoreService.instance.updateLeaderboardEntry(
-            auth.user!.uid,
-            auth.user!.displayName ?? 'Anonim',
-            model.totalFeniksPoints,
-            model.earnedBadges.length,
-          );
+        } catch (_) {
+          // Avoid hard crash when Firestore rules are not ready yet.
         }
       }
 
@@ -64,7 +75,8 @@ class _HomePageState extends State<HomePage> {
               badge: badge,
               onDismiss: () {
                 final bid = badge['id'] as String?;
-                if (bid != null) context.read<RadioPlayerModel>().markBadgeShown(bid);
+                if (bid != null)
+                  context.read<RadioPlayerModel>().markBadgeShown(bid);
                 Navigator.of(dialogContext).pop();
                 if (mounted) _saveAchievementsToFirestore();
               },
@@ -105,9 +117,8 @@ class _HomePageState extends State<HomePage> {
           final model = context.read<RadioPlayerModel>();
           model.markCelebrationShown();
           Navigator.of(context).pop();
-          // Auto-play disabled for testing purposes
-          // await model.play();
-          
+          await model.play();
+
           // Check for pending badges after celebration
           if (model.hasPendingBadges) {
             _showBadgeEarnedModal();
@@ -122,24 +133,31 @@ class _HomePageState extends State<HomePage> {
     final uid = auth.user?.uid;
     if (uid != null) {
       final model = context.read<RadioPlayerModel>();
-      await FirestoreService.instance.saveUserAchievements(uid, model.getAchievementData());
-      final name = auth.user?.displayName ?? 'Anonim';
-      await FirestoreService.instance.updateLeaderboardEntry(
-        uid,
-        name,
-        model.totalFeniksPoints,
-        model.earnedBadges.length,
-      );
+      try {
+        await FirestoreService.instance.saveUserAchievements(
+          uid,
+          model.getAchievementData(),
+        );
+        final name = auth.user?.displayName ?? 'Anonim';
+        await FirestoreService.instance.updateLeaderboardEntry(
+          uid,
+          name,
+          model.totalFeniksPoints,
+          model.earnedBadges.length,
+        );
+      } catch (_) {
+        // Ignore save failures caused by backend permission setup.
+      }
     }
   }
 
   void _showBadgeEarnedModal() {
     final model = context.read<RadioPlayerModel>();
     if (!model.hasPendingBadges) return;
-    
+
     final badgeId = model.getNextPendingBadge();
     final badge = model.allBadges[badgeId];
-    
+
     if (badge != null) {
       showDialog(
         context: context,
@@ -171,27 +189,28 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: const HeaderWithVolume(),
-      backgroundColor: isDarkMode ? AppTheme.background : const Color(0xFFF2F2F7),
+      backgroundColor: isDarkMode
+          ? AppTheme.background
+          : const Color(0xFFF2F2F7),
       body: Container(
         decoration: BoxDecoration(
-          gradient: isDarkMode 
-            ? AppTheme.backgroundGradient
-            : const LinearGradient(
-                colors: [
-                  Color(0xFFF2F2F7),
-                  Color(0xFFFFFFFF),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                stops: [0.0, 1.0],
-              ),
+          gradient: isDarkMode
+              ? AppTheme.backgroundGradient
+              : const LinearGradient(
+                  colors: [Color(0xFFF2F2F7), Color(0xFFFFFFFF)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0.0, 1.0],
+                ),
         ),
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(height: 270), // Space for header + volume bar + padding
+              const SizedBox(
+                height: 270,
+              ), // Space for header + volume bar + padding
               CurrentlyPlayingCard(model: model),
               const SizedBox(height: 24),
               const BadgesCard(),
@@ -202,7 +221,10 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ),
-      bottomNavigationBar: CommonFooter(currentRoute: '/home', isDark: isDarkMode),
+      bottomNavigationBar: CommonFooter(
+        currentRoute: '/home',
+        isDark: isDarkMode,
+      ),
     );
   }
 }

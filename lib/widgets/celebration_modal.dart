@@ -54,6 +54,8 @@ class _CelebrationModalState extends State<CelebrationModal>
   @override
   Widget build(BuildContext context) {
     final model = context.read<RadioPlayerModel>();
+    final streakDays = model.consecutiveDays <= 0 ? 1 : model.consecutiveDays;
+    final isFirstDay = streakDays <= 1;
     
     return AnimatedBuilder(
       animation: _animationController,
@@ -67,13 +69,17 @@ class _CelebrationModalState extends State<CelebrationModal>
               child: Container(
                 padding: const EdgeInsets.all(32),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  gradient: const LinearGradient(
+                    colors: [AppTheme.primary, AppTheme.primaryDark, AppTheme.accentDark],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 40,
-                      offset: const Offset(0, 20),
+                      color: AppTheme.primary.withValues(alpha: 0.4),
+                      blurRadius: 30,
+                      offset: const Offset(0, 15),
                     ),
                   ],
                 ),
@@ -108,12 +114,12 @@ class _CelebrationModalState extends State<CelebrationModal>
                     const SizedBox(height: 24),
                     
                     // Title
-                    const Text(
-                      'Dobrodošli natrag!',
+                    Text(
+                      isFirstDay ? 'Dobrodošli!' : 'Dobrodošli natrag!',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF1D1D1F),
+                        color: Colors.white,
                         letterSpacing: -0.5,
                       ),
                       textAlign: TextAlign.center,
@@ -122,10 +128,12 @@ class _CelebrationModalState extends State<CelebrationModal>
                     
                     // Subtitle
                     Text(
-                      'Odlično! Ovo je vaš ${model.consecutiveDays}. uzastopni dan slušanja Feniks Radija!',
+                      isFirstDay
+                          ? 'Super početak! Danas je vaš prvi dan slušanja Feniks Radija.'
+                          : 'Odlično! Ovo je vaš $streakDays. uzastopni dan slušanja Feniks Radija!',
                       style: const TextStyle(
                         fontSize: 16,
-                        color: Color(0xFF8E8E93),
+                        color: Colors.white,
                         fontWeight: FontWeight.w500,
                         height: 1.4,
                       ),
@@ -137,7 +145,7 @@ class _CelebrationModalState extends State<CelebrationModal>
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF2F2F7),
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
@@ -146,7 +154,7 @@ class _CelebrationModalState extends State<CelebrationModal>
                             icon: Icons.local_fire_department_rounded,
                             iconColor: const Color(0xFFFF3B30),
                             label: 'Streak',
-                            value: '${model.consecutiveDays} dana',
+                            value: '$streakDays dana',
                           ),
                           const Spacer(),
                           StatItem(
@@ -164,14 +172,14 @@ class _CelebrationModalState extends State<CelebrationModal>
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppTheme.primary.withValues(alpha: 0.1),
+                        color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
                         children: [
                           const Icon(
                             Icons.lightbulb_rounded,
-                            color: AppTheme.primary,
+                            color: Colors.white,
                             size: 20,
                           ),
                           const SizedBox(width: 8),
@@ -180,7 +188,7 @@ class _CelebrationModalState extends State<CelebrationModal>
                               'Svaki dan sa lijepim vijestima čini vas srećnijima!',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: AppTheme.primary.withValues(alpha: 0.8),
+                                color: Colors.white.withValues(alpha: 0.95),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -195,14 +203,12 @@ class _CelebrationModalState extends State<CelebrationModal>
                       width: double.infinity,
                       height: 50,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [AppTheme.primary, AppTheme.primaryDark],
-                        ),
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: AppTheme.primary.withValues(alpha: 0.3),
-                            blurRadius: 12,
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
                         ],
@@ -214,9 +220,9 @@ class _CelebrationModalState extends State<CelebrationModal>
                           onTap: widget.onDismiss,
                           child: const Center(
                             child: Text(
-                              'Nastavi slušanje',
+                              'Popravi dan!',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: AppTheme.primary,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 16,
                               ),

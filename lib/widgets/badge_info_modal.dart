@@ -57,14 +57,15 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
         child: Container(
           padding: const EdgeInsets.all(28),
           decoration: BoxDecoration(
-            color: isDarkMode ? const Color(0xFF1C1C1E) : Colors.white,
+            gradient: const LinearGradient(
+              colors: [AppTheme.primary, AppTheme.primaryDark, AppTheme.accentDark],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
             borderRadius: BorderRadius.circular(24),
-            border: isDarkMode ? Border.all(color: const Color(0xFF2C2C2E), width: 1) : null,
             boxShadow: [
               BoxShadow(
-                color: isDarkMode 
-                  ? Colors.black.withValues(alpha: 0.5)
-                  : Colors.black.withValues(alpha: 0.1),
+                color: AppTheme.primary.withValues(alpha: 0.4),
                 blurRadius: 30,
                 offset: const Offset(0, 15),
               ),
@@ -102,7 +103,7 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w800,
-                  color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF1F2937),
+                  color: Colors.white,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -113,7 +114,7 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                 'Osvajajte značke slušanjem Feniks Radija i ispunjavanjem različitih izazova!',
                 style: TextStyle(
                   fontSize: 16,
-                  color: isDarkMode ? AppTheme.textSecondary : const Color(0xFF6B7280),
+                  color: Colors.white,
                   height: 1.5,
                   fontWeight: FontWeight.w500,
                 ),
@@ -134,14 +135,10 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: isDarkMode 
-                    ? AppTheme.primary.withValues(alpha: 0.15)
-                    : AppTheme.primaryWithOpacity(0.08),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: isDarkMode 
-                      ? AppTheme.primary.withValues(alpha: 0.3)
-                      : AppTheme.primaryWithOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Column(
@@ -151,7 +148,7 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                       children: [
                         Icon(
                           Icons.lightbulb_outline,
-                          color: AppTheme.primary,
+                          color: Colors.white,
                           size: 20,
                         ),
                         const SizedBox(width: 8),
@@ -160,7 +157,7 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: AppTheme.primary,
+                            color: Colors.white,
                           ),
                         ),
                       ],
@@ -170,7 +167,7 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                       '• Značke se automatski dodjeljuju kada ispunite uslove\n• Možete pregledati sve dostupne značke\n• Značke pokazuju vašu posvećenost radiju',
                       style: TextStyle(
                         fontSize: 13,
-                        color: isDarkMode ? AppTheme.textSecondary : const Color(0xFF374151),
+                        color: Colors.white.withValues(alpha: 0.95),
                         height: 1.4,
                       ),
                     ),
@@ -184,11 +181,11 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                 width: double.infinity,
                 height: 48,
                 decoration: BoxDecoration(
-                  gradient: AppTheme.primaryGradient,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.primaryWithOpacity(0.3),
+                      color: Colors.black.withValues(alpha: 0.2),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -205,7 +202,7 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: AppTheme.primary,
                         ),
                       ),
                     ),
@@ -246,7 +243,7 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF1F2937),
+                  color: Colors.white,
                 ),
               ),
               const SizedBox(height: 2),
@@ -254,7 +251,7 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                 description,
                 style: TextStyle(
                   fontSize: 12,
-                  color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600,
+                  color: Colors.white.withValues(alpha: 0.9),
                 ),
               ),
             ],

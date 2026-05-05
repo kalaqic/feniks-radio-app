@@ -43,7 +43,7 @@ class _SettingsPageState extends State<SettingsPage> {
             size: 28,
           ),
           onPressed: () {
-            context.read<RadioPlayerModel>().trackPageVisit('/profile');
+            context.read<RadioPlayerModel>().trackPageVisit('/settings');
             Navigator.pushNamedAndRemoveUntil(context, '/profile', (route) => false);
           },
         ),
@@ -638,7 +638,7 @@ class _SettingsPageState extends State<SettingsPage> {
       width: double.infinity,
       child: OutlinedButton.icon(
         onPressed: () {
-          context.read<RadioPlayerModel>().trackPageVisit('/profile');
+          context.read<RadioPlayerModel>().trackPageVisit('/settings');
           Navigator.pushNamedAndRemoveUntil(context, '/profile', (route) => false);
         },
         icon: const Icon(Icons.person_outline_rounded, size: 20),

@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/metadata_service.dart';
+import '../services/firestore_service.dart';
 
 const kStreamUrl = 'https://c30.radioboss.fm:8234/stream';
 
@@ -59,6 +61,7 @@ class RadioPlayerModel extends ChangeNotifier {
   final Set<String> _musicGenres = {};
   int _referralCount = 0;
   bool _isCommunityMember = false;
+  bool _syncInProgress = false;
   
   // Track unique days for weekend_warrior and workday_warrior
   final Set<String> _weekendDaysVisited = {};
@@ -664,12 +667,14 @@ class RadioPlayerModel extends ChangeNotifier {
       _checkMusicAchievements();
     }
     onProgressChanged?.call();
+    unawaited(_syncProgressToFirestore());
     notifyListeners();
   }
 
   void removeFavorite(String song) {
     _favoriteSongs.remove(song);
     onProgressChanged?.call();
+    unawaited(_syncProgressToFirestore());
     notifyListeners();
   }
   
@@ -718,7 +723,8 @@ class RadioPlayerModel extends ChangeNotifier {
       if (onAchievementEarned != null) {
         onAchievementEarned!(badgeData);
       }
-      
+      onProgressChanged?.call();
+      unawaited(_syncProgressToFirestore());
       notifyListeners();
     }
   }
@@ -778,6 +784,7 @@ class RadioPlayerModel extends ChangeNotifier {
 
   Future<void> init() async {
     try {
+      _appInstallDate ??= DateTime.now();
       final session = await AudioSession.instance; 
       await session.configure(const AudioSessionConfiguration.music());
       await _player.setAudioSource(AudioSource.uri(Uri.parse(kStreamUrl)));
@@ -792,6 +799,7 @@ class RadioPlayerModel extends ChangeNotifier {
       
       // Get initial metadata
       updateSong();
+      _checkMilestoneAchievements();
       
       notifyListeners();
     } catch (e) {
@@ -803,6 +811,7 @@ class RadioPlayerModel extends ChangeNotifier {
       _metadataService.start();
       _metadataService.metadataStream?.listen(_updateCurrentSong);
       updateSong();
+      _checkMilestoneAchievements();
       
       notifyListeners();
     }
@@ -927,6 +936,7 @@ class RadioPlayerModel extends ChangeNotifier {
       _continuousSessionStart = null;
       _qualitySessionStart = null;
       onProgressChanged?.call();
+      unawaited(_syncProgressToFirestore());
       notifyListeners();
     }
   }
@@ -1125,6 +1135,28 @@ class RadioPlayerModel extends ChangeNotifier {
       if (_pagesVisited >= (_allBadges['app_explorer']!['requirement'] as int)) {
         _awardBadge('app_explorer');
       }
+      onProgressChanged?.call();
+      unawaited(_syncProgressToFirestore());
+    }
+  }
+
+  Future<void> _syncProgressToFirestore() async {
+    if (_syncInProgress) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    _syncInProgress = true;
+    try {
+      await FirestoreService.instance.saveUserAchievements(user.uid, getAchievementData());
+      await FirestoreService.instance.updateLeaderboardEntry(
+        user.uid,
+        user.displayName ?? 'Anonim',
+        totalFeniksPoints,
+        earnedBadges.length,
+      );
+    } catch (_) {
+      // Keep app stable if Firestore rules are strict.
+    } finally {
+      _syncInProgress = false;
     }
   }
 
@@ -1392,6 +1424,7 @@ class RadioPlayerModel extends ChangeNotifier {
       _todayListeningSeconds = 0;
     }
     _longestSessionDuration = data['longestSessionDuration'] as int? ?? 0;
+    _checkMilestoneAchievements();
     notifyListeners();
   }
 

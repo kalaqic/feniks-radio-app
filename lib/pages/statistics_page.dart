@@ -349,9 +349,9 @@ class _StatisticsPageState extends State<StatisticsPage> {
           SizedBox(
             height: 48,
             child: ElevatedButton.icon(
-              onPressed: () => Navigator.pushNamed(context, '/leaderboard'),
+              onPressed: () => Navigator.pushNamed(context, '/ether-messages'),
               icon: const Icon(Icons.leaderboard_outlined, size: 20),
-              label: const Text('Otvori Leaderboard'),
+              label: const Text('Otvori Poruke'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primary,
                 foregroundColor: Colors.white,

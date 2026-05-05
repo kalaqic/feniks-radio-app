@@ -8,7 +8,6 @@ import 'models/radio_player_model.dart';
 import 'services/notification_service.dart';
 import 'services/auth_service.dart';
 import 'pages/home_page.dart';
-import 'pages/leaderboard_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/profile_page.dart';
 import 'pages/favorites_page.dart';
@@ -67,7 +66,7 @@ class FeniksApp extends StatelessWidget {
                 );
               case '/leaderboard':
                 return createRoute(
-                  page: const LeaderboardPage(),
+                  page: const EtherMessagesPage(),
                   settings: settings,
                   transitionType: PageTransitionType.fade,
                 );

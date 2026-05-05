@@ -78,6 +78,40 @@ class CurrentlyPlayingCard extends StatelessWidget {
                       letterSpacing: -0.1,
                     ),
                   ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: model.playing
+                          ? const Color(0xFF34C759).withValues(alpha: 0.15)
+                          : const Color(0xFF8E8E93).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: model.playing
+                            ? const Color(0xFF34C759).withValues(alpha: 0.5)
+                            : const Color(0xFF8E8E93).withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          model.playing ? Icons.radio_button_on : Icons.radio_button_off,
+                          size: 12,
+                          color: model.playing ? const Color(0xFF34C759) : const Color(0xFF8E8E93),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          model.playing ? 'Radio: ON' : 'Radio: OFF',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: model.playing ? const Color(0xFF34C759) : const Color(0xFF8E8E93),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 18),

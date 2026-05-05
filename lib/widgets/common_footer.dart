@@ -46,14 +46,14 @@ class CommonFooter extends StatelessWidget {
                 },
               ),
               FooterButton(
-                icon: Icons.leaderboard_outlined,
-                label: 'Leaderboard',
-                isActive: currentRoute == '/leaderboard',
+                icon: Icons.message_outlined,
+                label: 'Poruke',
+                isActive: currentRoute == '/ether-messages',
                 isDark: isDark,
                 onTap: () {
-                  if (currentRoute != '/leaderboard') {
-                    context.read<RadioPlayerModel>().trackPageVisit('/leaderboard');
-                    Navigator.pushNamed(context, '/leaderboard');
+                  if (currentRoute != '/ether-messages') {
+                    context.read<RadioPlayerModel>().trackPageVisit('/ether-messages');
+                    Navigator.pushNamed(context, '/ether-messages');
                   }
                 },
               ),

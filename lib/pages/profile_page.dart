@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
@@ -34,11 +35,22 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _loadDisplayEmail() async {
     final auth = context.read<AuthService>();
     if (auth.user?.uid == null) return;
-    final email = await FirestoreService.instance.getUserDisplayEmail(auth.user!.uid);
-    if (mounted) setState(() {
-      _displayEmail = email;
-      if (email != null) _emailController.text = email;
-    });
+    try {
+      final email = await FirestoreService.instance.getUserDisplayEmail(auth.user!.uid);
+      if (mounted) {
+        setState(() {
+          _displayEmail = email;
+          if (email != null) _emailController.text = email;
+        });
+      }
+    } on FirebaseException catch (e) {
+      if (e.code != 'permission-denied') return;
+      if (mounted) {
+        setState(() {
+          _displayEmail = null;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _saveDisplayEmail() async {
@@ -46,21 +58,41 @@ class _ProfilePageState extends State<ProfilePage> {
     if (auth.user?.uid == null) return;
     setState(() => _savingEmail = true);
     final value = _emailController.text.trim();
-    await FirestoreService.instance.setUserDisplayEmail(
-      auth.user!.uid,
-      value.isEmpty ? null : value,
-    );
-    if (mounted) {
-      setState(() {
-        _displayEmail = value.isEmpty ? null : value;
-        _savingEmail = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(value.isEmpty ? 'Email uklonjen.' : 'Email sačuvan.'),
-          behavior: SnackBarBehavior.floating,
-        ),
+    try {
+      await FirestoreService.instance.setUserDisplayEmail(
+        auth.user!.uid,
+        value.isEmpty ? null : value,
       );
+      if (mounted) {
+        setState(() {
+          _displayEmail = value.isEmpty ? null : value;
+          _savingEmail = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(value.isEmpty ? 'Email uklonjen.' : 'Email sačuvan.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        setState(() => _savingEmail = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.code == 'permission-denied'
+                  ? 'Nemate dozvolu za ovu radnju (Firestore pravila).'
+                  : 'Greška pri čuvanju emaila.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _savingEmail = false);
+      }
     }
   }
 

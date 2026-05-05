@@ -21,25 +21,23 @@ class LoginRequiredDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Theme.of(context).brightness == Brightness.dark;
-    final isDarkMode = themeProvider;
-
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: isDarkMode ? AppTheme.cardBackground : Colors.white,
+          gradient: const LinearGradient(
+            colors: [AppTheme.primary, AppTheme.primaryDark, AppTheme.accentDark],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
           borderRadius: BorderRadius.circular(24),
-          border: isDarkMode
-              ? Border.all(color: AppTheme.cardBorder, width: 1)
-              : null,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
+              color: AppTheme.primary.withValues(alpha: 0.4),
+              blurRadius: 30,
+              offset: const Offset(0, 15),
             ),
           ],
         ),
@@ -77,7 +75,7 @@ class LoginRequiredDialog extends StatelessWidget {
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
-                color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF1F2937),
+                color: Colors.white,
               ),
               textAlign: TextAlign.center,
             ),
@@ -89,7 +87,7 @@ class LoginRequiredDialog extends StatelessWidget {
               style: TextStyle(
                 fontSize: 15,
                 height: 1.5,
-                color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600,
+                color: Colors.white.withValues(alpha: 0.95),
               ),
               textAlign: TextAlign.center,
             ),
@@ -108,7 +106,7 @@ class LoginRequiredDialog extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       side: BorderSide(
-                        color: isDarkMode ? AppTheme.cardBorder : Colors.grey.shade300,
+                        color: Colors.white.withValues(alpha: 0.5),
                       ),
                     ),
                     child: Text(
@@ -116,7 +114,7 @@ class LoginRequiredDialog extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF1F2937),
+                        color: Colors.white,
                       ),
                     ),
                   ),
@@ -127,13 +125,11 @@ class LoginRequiredDialog extends StatelessWidget {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppTheme.primary, AppTheme.primaryDark],
-                      ),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: AppTheme.primaryWithOpacity(0.3),
+                          color: Colors.black.withValues(alpha: 0.2),
                           blurRadius: 10,
                           offset: const Offset(0, 5),
                         ),
@@ -153,7 +149,7 @@ class LoginRequiredDialog extends StatelessWidget {
                           child: const Text(
                             'Prijavi se',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: AppTheme.primary,
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                             ),

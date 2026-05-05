@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:math' as math;
-import 'dart:async';
 import '../services/auth_service.dart';
 
 class LoadingScreen extends StatefulWidget {
@@ -13,110 +11,27 @@ class LoadingScreen extends StatefulWidget {
 
 class _LoadingScreenState extends State<LoadingScreen>
     with TickerProviderStateMixin {
-  late AnimationController _zoomController;
-  late AnimationController _spinController;
-  late AnimationController _slideController;
-  late AnimationController _textController;
-  late Animation<double> _zoomAnimation;
-  late Animation<double> _spinAnimation;
-  late Animation<double> _slideAnimation;
-  late Animation<double> _textFadeAnimation;
-  late Animation<double> _logoShrinkAnimation;
-  late Animation<double> _textGrowAnimation;
-  late Timer _navigationTimer;
+  late AnimationController _delayController;
+  late AnimationController _logoPulseController;
+  late Animation<double> _logoScale;
 
   @override
   void initState() {
     super.initState();
-    
-    // Zoom animation (fast to slow)
-    _zoomController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+    _delayController = AnimationController(
+      duration: const Duration(seconds: 5),
       vsync: this,
     );
-    
-    // Spin animation (one full circle)
-    _spinController = AnimationController(
-      duration: const Duration(milliseconds: 2000),
+    _logoPulseController = AnimationController(
+      duration: const Duration(milliseconds: 1400),
       vsync: this,
     );
-
-    // Slide animation (move logo to left)
-    _slideController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
+    _logoScale = Tween<double>(begin: 0.97, end: 1.03).animate(
+      CurvedAnimation(parent: _logoPulseController, curve: Curves.easeInOut),
     );
+    _logoPulseController.repeat(reverse: true);
 
-    // Text fade animation
-    _textController = AnimationController(
-      duration: const Duration(milliseconds: 1000),
-      vsync: this,
-    );
-
-    // Zoom animation with ease-out curve (fast to slow)
-    _zoomAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _zoomController,
-      curve: Curves.easeOut,
-    ));
-
-    // Spin animation (one full rotation)
-    _spinAnimation = Tween<double>(
-      begin: 0.0,
-      end: 2 * math.pi,
-    ).animate(CurvedAnimation(
-      parent: _spinController,
-      curve: Curves.easeInOut,
-    ));
-
-    // Slide animation (move to left)
-    _slideAnimation = Tween<double>(
-      begin: 0.0,
-      end: -90.0,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeOutBack,
-    ));
-
-    // Text fade animation
-    _textFadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _textController,
-      curve: Curves.easeIn,
-    ));
-
-    // Logo shrink animation (when sliding)
-    _logoShrinkAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.7,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeInOut,
-    ));
-
-    // Text grow animation
-    _textGrowAnimation = Tween<double>(
-      begin: 0.8,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _textController,
-      curve: Curves.easeOut,
-    ));
-
-    // Start animations sequence
-    _zoomController.forward();
-    _spinController.forward().then((_) {
-      // After spin completes, slide logo left and show text simultaneously
-      _slideController.forward();
-      _textController.forward();
-    });
-
-    // After 5 seconds, check auth and navigate to home (if logged in) or welcome (if not)
-    _navigationTimer = Timer(const Duration(seconds: 5), () {
+    _delayController.forward().then((_) {
       if (!mounted) return;
       final isLoggedIn = context.read<AuthService>().isAuthenticated;
       Navigator.pushReplacementNamed(
@@ -128,11 +43,8 @@ class _LoadingScreenState extends State<LoadingScreen>
 
   @override
   void dispose() {
-    _navigationTimer.cancel();
-    _zoomController.dispose();
-    _spinController.dispose();
-    _slideController.dispose();
-    _textController.dispose();
+    _delayController.dispose();
+    _logoPulseController.dispose();
     super.dispose();
   }
 
@@ -153,19 +65,15 @@ class _LoadingScreenState extends State<LoadingScreen>
               ),
             ),
           ),
-          AnimatedBuilder(
-            animation: Listenable.merge([_zoomController, _spinController, _slideController, _textController]),
-            builder: (context, child) {
-              return Stack(
-                children: [
-                  // Logo with animations - starts centered, slides left
-                Positioned(
-                  left: MediaQuery.of(context).size.width / 2 - 60 + _slideAnimation.value, // Center minus half logo width
-                  top: MediaQuery.of(context).size.height / 2 - 60, // Center minus half logo height
-                  child: Transform.scale(
-                    scale: _zoomAnimation.value * _logoShrinkAnimation.value,
-                    child: Transform.rotate(
-                      angle: _spinAnimation.value,
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedBuilder(
+                  animation: _logoScale,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: _logoScale.value,
                       child: Container(
                         width: 120,
                         height: 120,
@@ -188,50 +96,17 @@ class _LoadingScreenState extends State<LoadingScreen>
                           ),
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
-                
-                // Text that fades in - centered on screen, left-aligned
-                Positioned(
-                  left: MediaQuery.of(context).size.width / 2 - 40, // Center minus offset for left-aligned text
-                  top: MediaQuery.of(context).size.height / 2 - 28, // Vertically centered with logo
-                  child: Transform.scale(
-                    scale: _textGrowAnimation.value,
-                    child: Opacity(
-                      opacity: _textFadeAnimation.value,
-                      child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'FENIKS',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFFEB6556),
-                            letterSpacing: 2.0,
-                            height: 0.9,
-                          ),
-                        ),
-                        Text(
-                          'RADIO',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w300,
-                            color: Color(0xFF1D1D1F),
-                            letterSpacing: 2.0,
-                            height: 0.9,
-                          ),
-                        ),
-                      ],
-                      ),
-                    ),
-                  ),
+                const SizedBox(height: 28),
+                const SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
                 ),
-                ],
-              );
-            },
+              ],
+            ),
           ),
         ],
       ),

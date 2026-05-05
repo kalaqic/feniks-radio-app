@@ -368,124 +368,121 @@ class _BadgesPageState extends State<BadgesPage> {
   void _showBadgeDetails(Map<String, dynamic> badge, bool isEarned, bool isDarkMode) {
     final badgeColor = Color(badge['color'] as int);
     
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xFF1C1C1E) : Colors.white,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [AppTheme.primary, AppTheme.primaryDark, AppTheme.accentDark],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primary.withValues(alpha: 0.4),
+                blurRadius: 30,
+                offset: const Offset(0, 15),
+              ),
+            ],
           ),
-          border: isDarkMode ? Border.all(color: const Color(0xFF2C2C2E), width: 1) : null,
-        ),
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle bar
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            // Badge icon with status
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: isEarned 
-                    ? badgeColor
-                    : Colors.grey.shade300,
-                shape: BoxShape.circle,
-                boxShadow: isEarned ? [
-                  BoxShadow(
-                    color: badgeColor.withValues(alpha: 0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: isEarned ? badgeColor : Colors.white.withValues(alpha: 0.25),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      blurRadius: 15,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    badge['icon'] as String,
+                    style: const TextStyle(fontSize: 40),
                   ),
-                ] : null,
+                ),
               ),
-              child: Center(
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                ),
                 child: Text(
-                  badge['icon'] as String,
-                  style: const TextStyle(fontSize: 40),
+                  isEarned ? 'Osvojeno' : 'Zaključano',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            
-            // Status badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: isEarned 
-                    ? (isDarkMode ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade50)
-                    : (isDarkMode ? AppTheme.backgroundMedium : Colors.grey.shade50),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isEarned 
-                      ? (isDarkMode ? Colors.green : Colors.green.shade200)
-                      : (isDarkMode ? AppTheme.cardBorder : Colors.grey.shade300),
-                ),
-              ),
-              child: Text(
-                isEarned ? 'Osvojeno' : 'Zaključano',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isEarned 
-                      ? (isDarkMode ? Colors.green : Colors.green.shade700)
-                      : (isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            
-            // Badge name and description
-            Text(
-              badge['name'] as String,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF1F2937),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            
-            Text(
-              badge['description'] as String,
-              style: TextStyle(
-                fontSize: 16,
-                color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600,
-                height: 1.4,
-                fontWeight: FontWeight.w500,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            
-            if (isEarned && badge.containsKey('earnedDate')) ...[
               const SizedBox(height: 16),
               Text(
-                'Osvojeno ${_formatDate(badge['earnedDate'] as String)}',
+                badge['name'] as String,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                badge['description'] as String,
                 style: TextStyle(
-                  fontSize: 14,
-                  color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade500,
+                  fontSize: 16,
+                  color: Colors.white.withValues(alpha: 0.95),
+                  height: 1.4,
                   fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (isEarned && badge.containsKey('earnedDate')) ...[
+                const SizedBox(height: 16),
+                Text(
+                  'Osvojeno ${_formatDate(badge['earnedDate'] as String)}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppTheme.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'U redu',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
               ),
             ],
-            
-            const SizedBox(height: 24),
-          ],
+          ),
         ),
       ),
     );

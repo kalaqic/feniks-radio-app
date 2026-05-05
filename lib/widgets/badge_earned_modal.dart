@@ -82,7 +82,6 @@ class _BadgeEarnedModalState extends State<BadgeEarnedModal>
   @override
   Widget build(BuildContext context) {
     final badgeColor = Color(widget.badge['color'] as int);
-    
     return Dialog(
       backgroundColor: Colors.transparent,
       child: ScaleTransition(
@@ -92,7 +91,8 @@ class _BadgeEarnedModalState extends State<BadgeEarnedModal>
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                badgeColor.withValues(alpha: 0.95),
+                badgeColor,
+                badgeColor.withValues(alpha: 0.92),
                 badgeColor.withValues(alpha: 0.8),
               ],
               begin: Alignment.topLeft,

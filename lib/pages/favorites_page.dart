@@ -125,38 +125,63 @@ class _FavoritesPageState extends State<FavoritesPage> {
         return Container(
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
-            color: isDarkMode ? AppTheme.cardBackground : Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            gradient: isDarkMode
+                ? LinearGradient(
+                    colors: [
+                      AppTheme.cardBackground,
+                      AppTheme.backgroundMedium.withValues(alpha: 0.75),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : const LinearGradient(
+                    colors: [
+                      Color(0xFFFFFFFF),
+                      Color(0xFFF8FAFF),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+            borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
                 color: isDarkMode 
                   ? Colors.black.withValues(alpha: 0.3)
                   : Colors.black.withValues(alpha: 0.05),
-                blurRadius: 15,
-                offset: const Offset(0, 4),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
               ),
             ],
             border: Border.all(
-              color: isDarkMode ? AppTheme.cardBorder : Colors.grey.shade100,
+              color: isDarkMode
+                  ? AppTheme.cardBorder
+                  : const Color(0xFFE5E7EB),
               width: 1,
             ),
           ),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(18),
               onTap: () => _showSongDetails(title, artist, song, model, isDarkMode),
               child: Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(18),
                 child: Row(
                   children: [
                     // Music Note Icon
                     Container(
-                      width: 48,
-                      height: 48,
+                      width: 52,
+                      height: 52,
                       decoration: BoxDecoration(
                         gradient: AppTheme.primaryGradient,
-                        shape: BoxShape.circle,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryWithOpacity(0.28),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
                       child: const Icon(
                         Icons.music_note_rounded,
@@ -175,8 +200,9 @@ class _FavoritesPageState extends State<FavoritesPage> {
                             title,
                             style: TextStyle(
                               fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                               color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF1F2937),
+                              letterSpacing: -0.2,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -185,7 +211,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                           Text(
                             artist,
                             style: TextStyle(
-                              fontSize: 14,
+                              fontSize: 13,
                               color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600,
                               fontWeight: FontWeight.w500,
                             ),
@@ -201,13 +227,20 @@ class _FavoritesPageState extends State<FavoritesPage> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        shape: BoxShape.circle,
+                        color: isDarkMode
+                            ? Colors.red.withValues(alpha: 0.15)
+                            : Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isDarkMode
+                              ? Colors.red.withValues(alpha: 0.25)
+                              : Colors.red.shade100,
+                        ),
                       ),
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(12),
                           onTap: () {
                             final authService = context.read<AuthService>();
                             if (!authService.isAuthenticated) {
