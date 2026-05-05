@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../services/notification_service.dart';
@@ -37,6 +38,8 @@ class _SettingsPageState extends State<SettingsPage> {
       backgroundColor: model.isDarkMode ? AppTheme.background : Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         leading: IconButton(
+          padding: const EdgeInsets.only(left: 12),
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           icon: Icon(
             Icons.chevron_left_rounded,
             color: model.isDarkMode ? Colors.white : null,
@@ -107,7 +110,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   children: [
                     _buildToggleSetting(
                       'Omogući notifikacije',
-                      'Primi obavještenja o novim sadržajima',
+                      'Dobij podsjetnik da se uključiš u program i slušaš uživo',
                       Icons.notifications_active_outlined,
                       model.notificationsEnabled,
                       (value) => model.notificationsEnabled = value,
@@ -173,7 +176,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   children: [
                     _buildInfoSetting('Verzija', '1.0.0', Icons.system_update_outlined, null),
                     const SizedBox(height: 12),
-                    _buildInfoSetting('Podrška', 'feniks@radio.ba', Icons.email_outlined, () => _openEmailSupport()),
+                    _buildInfoSetting('Podrška', 'feniks.radio94.7@gmail.com', Icons.email_outlined, () => _openEmailSupport()),
                     const SizedBox(height: 12),
                     _buildInfoSetting('Uslovi korišćenja', 'Prikaži', Icons.description_outlined, () => _showTermsOfService()),
                   ],
@@ -592,19 +595,14 @@ class _SettingsPageState extends State<SettingsPage> {
   }
   
   void _openEmailSupport() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Podrška'),
-        content: const Text('Za podršku kontaktirajte:\nfeniks@radio.ba'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('U redu'),
-          ),
-        ],
-      ),
+    final uri = Uri(
+      scheme: 'mailto',
+      path: 'feniks.radio94.7@gmail.com',
+      queryParameters: {
+        'subject': 'Podrška - Feniks Radio',
+      },
     );
+    launchUrl(uri);
   }
   
   void _showTermsOfService() {
@@ -616,11 +614,18 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Text(
             'Korišćenjem Feniks Radio aplikacije slažete se sa sljedećim uslovima:\n\n'
             '1. Aplikacija je besplatna za korišćenje\n'
-            '2. Sav sadržaj je vlasništvo Feniks Radija\n'
-            '3. Zabranjena je redistribucija sadržaja\n'
-            '4. Aplikacija se koristi po vlastitoj odgovornosti\n'
-            '5. Feniks Radio zadržava pravo promjene uslova\n\n'
-            'Za više informacija kontaktirajte feniks@radio.ba',
+            '   Osnovne funkcije slušanja radija dostupne su bez naknade, osim opcionalnih plaćenih poruka/zahtjeva za pjesme.\n\n'
+            '2. Sav sadržaj je vlasništvo Feniks Radija ili njegovih partnera\n'
+            '   Audio stream, vizuelni elementi, logo i tekstualni sadržaj zaštićeni su autorskim i srodnim pravima.\n\n'
+            '3. Zabranjena je neovlaštena redistribucija sadržaja\n'
+            '   Nije dozvoljeno kopiranje, javno ponovno emitovanje, prodaja ili distribucija sadržaja bez pismene dozvole.\n\n'
+            '4. Plaćene poruke i zahtjevi za pjesme\n'
+            '   Ako je zahtjev za pjesmu uspješno plaćen i zaprimljen, Feniks Radio garantuje da će ta pjesma biti emitovana u programu u narednom periodu.\n\n'
+            '5. Privatnost i obrada podataka\n'
+            '   Feniks Radio može obrađivati osnovne podatke naloga i statistiku korišćenja (npr. postignuća, omiljene pjesme) radi rada aplikacije.\n\n'
+            '6. Feniks Radio zadržava pravo izmjene uslova\n'
+            '   Uslovi korišćenja mogu biti ažurirani radi usklađivanja sa funkcionalnostima aplikacije i važećim pravilima.\n\n'
+            'Za više informacija kontaktirajte feniks.radio94.7@gmail.com',
           ),
         ),
         actions: [

@@ -13,10 +13,7 @@ class PlayerCard extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [
-            Color(0xFF007AFF),
-            Color(0xFF5856D6),
-          ],
+          colors: [Color(0xFF007AFF), Color(0xFF5856D6)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -48,11 +45,7 @@ class PlayerCard extends StatelessWidget {
                 width: 2,
               ),
             ),
-            child: const Icon(
-              Icons.radio,
-              size: 32,
-              color: Colors.white,
-            ),
+            child: const Icon(Icons.radio, size: 32, color: Colors.white),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -70,7 +63,7 @@ class PlayerCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Uživo prijenos',
+                  'Samo dobre vijesti!',
                   style: TextStyle(
                     fontSize: 15,
                     color: Colors.white.withValues(alpha: 0.8),
@@ -108,8 +101,12 @@ class PlayerCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(24),
                         onTap: () => playing ? model.stop() : model.play(),
                         child: Icon(
-                          playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
-                          color: playing ? const Color(0xFFFF3B30) : const Color(0xFF34C759),
+                          playing
+                              ? Icons.stop_rounded
+                              : Icons.play_arrow_rounded,
+                          color: playing
+                              ? const Color(0xFFFF3B30)
+                              : const Color(0xFF34C759),
                           size: 24,
                         ),
                       ),

@@ -116,19 +116,6 @@ class _ProfilePageState extends State<ProfilePage> {
         automaticallyImplyLeading: false,
         backgroundColor: isDarkMode ? Colors.transparent : null,
         elevation: isDarkMode ? 0 : null,
-        actions: [
-          IconButton(
-            icon: Icon(
-              Icons.settings_outlined,
-              color: isDarkMode ? Colors.white : null,
-              size: 24,
-            ),
-            onPressed: () {
-              model.trackPageVisit('/settings');
-              Navigator.pushNamed(context, '/settings');
-            },
-          ),
-        ],
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -283,6 +270,20 @@ class _ProfilePageState extends State<ProfilePage> {
                     ],
                   ],
                 ),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.settings_rounded,
+                  size: 22,
+                  color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF4B5563),
+                ),
+                tooltip: 'Postavke',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                onPressed: () {
+                  model.trackPageVisit('/settings');
+                  Navigator.pushNamed(context, '/settings');
+                },
               ),
             ],
           ),

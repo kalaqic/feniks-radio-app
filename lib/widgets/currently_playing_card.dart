@@ -26,15 +26,23 @@ class CurrentlyPlayingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
     final isDarkMode = themeProvider.isDarkMode;
-    
+
     return Consumer<RadioPlayerModel>(
       builder: (context, model, child) {
         // Format song and artist names
         final formattedInfo = TextFormatting.formatSongInfo(
-          model.currentSong, 
+          model.currentSong,
           model.currentArtist,
         );
-        
+        final title = formattedInfo['title'] ?? model.currentSong;
+        final artist = formattedInfo['artist'] ?? model.currentArtist;
+        final isFallbackMetadata =
+            title.trim() == 'Feniks Radio' &&
+            artist.trim() == 'Samo dobre vijesti!';
+        final showFetchingHint =
+            !model.playing &&
+            (model.isFetchingCurrentSong || isFallbackMetadata);
+
         return AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           width: double.infinity,
@@ -43,9 +51,9 @@ class CurrentlyPlayingCard extends StatelessWidget {
             color: Colors.transparent,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isDarkMode 
-                ? AppTheme.cardBorder
-                : Colors.white.withValues(alpha: 0.1),
+              color: isDarkMode
+                  ? AppTheme.cardBorder
+                  : Colors.white.withValues(alpha: 0.1),
               width: 1,
             ),
           ),
@@ -74,48 +82,50 @@ class CurrentlyPlayingCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: isDarkMode ? AppTheme.textSecondary : const Color(0xFF2D2D30),
+                      color: isDarkMode
+                          ? AppTheme.textSecondary
+                          : const Color(0xFF2D2D30),
                       letterSpacing: -0.1,
                     ),
                   ),
                   const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: model.playing
-                          ? const Color(0xFF34C759).withValues(alpha: 0.15)
-                          : const Color(0xFF8E8E93).withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: model.playing
-                            ? const Color(0xFF34C759).withValues(alpha: 0.5)
-                            : const Color(0xFF8E8E93).withValues(alpha: 0.35),
+                  if (model.playing)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF34C759).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFF34C759).withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.radio_button_on,
+                            size: 12,
+                            color: Color(0xFF34C759),
+                          ),
+                          SizedBox(width: 5),
+                          Text(
+                            'Radio: ON',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF34C759),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          model.playing ? Icons.radio_button_on : Icons.radio_button_off,
-                          size: 12,
-                          color: model.playing ? const Color(0xFF34C759) : const Color(0xFF8E8E93),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          model.playing ? 'Radio: ON' : 'Radio: OFF',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: model.playing ? const Color(0xFF34C759) : const Color(0xFF8E8E93),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
               const SizedBox(height: 18),
-              
+
               // Listening timer (when playing)
               if (model.playing) ...[
                 Row(
@@ -123,7 +133,9 @@ class CurrentlyPlayingCard extends StatelessWidget {
                     Icon(
                       Icons.timer_outlined,
                       size: 16,
-                      color: isDarkMode ? AppTheme.textSecondary : const Color(0xFF6D6D70),
+                      color: isDarkMode
+                          ? AppTheme.textSecondary
+                          : const Color(0xFF6D6D70),
                     ),
                     const SizedBox(width: 6),
                     Text(
@@ -131,7 +143,9 @@ class CurrentlyPlayingCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: isDarkMode ? AppTheme.primary : AppTheme.primaryDark,
+                        color: isDarkMode
+                            ? AppTheme.primary
+                            : AppTheme.primaryDark,
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -140,14 +154,16 @@ class CurrentlyPlayingCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: isDarkMode ? AppTheme.textSecondary : const Color(0xFF6D6D70),
+                        color: isDarkMode
+                            ? AppTheme.textSecondary
+                            : const Color(0xFF6D6D70),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 14),
               ],
-              
+
               // Song info and favorite button
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -157,24 +173,41 @@ class CurrentlyPlayingCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          formattedInfo['title'] ?? model.currentSong,
+                          showFetchingHint ? 'Pušta se radio..' : title,
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF1D1D1F),
+                            color: isDarkMode
+                                ? AppTheme.textPrimary
+                                : const Color(0xFF1D1D1F),
                             letterSpacing: -0.3,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        if ((formattedInfo['artist'] ?? model.currentArtist).isNotEmpty) ...[
+                        if (showFetchingHint) ...[
                           const SizedBox(height: 4),
                           Text(
-                            formattedInfo['artist'] ?? model.currentArtist,
+                            'Molimo sačekajte',
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
-                              color: isDarkMode ? AppTheme.textSecondary : const Color(0xFF6D6D70),
+                              color: isDarkMode
+                                  ? AppTheme.textSecondary
+                                  : const Color(0xFF6D6D70),
+                              letterSpacing: -0.1,
+                            ),
+                          ),
+                        ] else if (artist.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            artist,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              color: isDarkMode
+                                  ? AppTheme.textSecondary
+                                  : const Color(0xFF6D6D70),
                               letterSpacing: -0.1,
                             ),
                             maxLines: 1,
@@ -185,9 +218,14 @@ class CurrentlyPlayingCard extends StatelessWidget {
                             Align(
                               alignment: Alignment.centerLeft,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF007AFF).withValues(alpha: 0.8),
+                                  color: const Color(
+                                    0xFF007AFF,
+                                  ).withValues(alpha: 0.8),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -211,22 +249,24 @@ class CurrentlyPlayingCard extends StatelessWidget {
                   Container(
                     decoration: BoxDecoration(
                       gradient: model.isFavorite(model.currentSongDisplay)
-                        ? const LinearGradient(
-                            colors: [Color(0xFFFF3B30), Color(0xFFFF6B6B)],
-                          )
-                        : LinearGradient(
-                            colors: [
-                              const Color(0xFF8E8E93).withValues(alpha: 0.1),
-                              const Color(0xFF8E8E93).withValues(alpha: 0.05),
-                            ],
-                          ),
+                          ? const LinearGradient(
+                              colors: [Color(0xFFFF3B30), Color(0xFFFF6B6B)],
+                            )
+                          : LinearGradient(
+                              colors: [
+                                const Color(0xFF8E8E93).withValues(alpha: 0.1),
+                                const Color(0xFF8E8E93).withValues(alpha: 0.05),
+                              ],
+                            ),
                       borderRadius: BorderRadius.circular(8),
-                      border: model.isFavorite(model.currentSongDisplay) 
-                        ? null
-                        : Border.all(
-                            color: const Color(0xFF8E8E93).withValues(alpha: 0.3),
-                            width: 1,
-                          ),
+                      border: model.isFavorite(model.currentSongDisplay)
+                          ? null
+                          : Border.all(
+                              color: const Color(
+                                0xFF8E8E93,
+                              ).withValues(alpha: 0.3),
+                              width: 1,
+                            ),
                     ),
                     child: Material(
                       color: Colors.transparent,
@@ -235,37 +275,48 @@ class CurrentlyPlayingCard extends StatelessWidget {
                         onTap: () {
                           final authService = context.read<AuthService>();
                           // Allow removal without login, but require login for adding
-                          if (!model.isFavorite(model.currentSongDisplay) && !authService.isAuthenticated) {
-                            LoginRequiredDialog.show(context, 'dodavanje omiljenih pjesama');
+                          if (!model.isFavorite(model.currentSongDisplay) &&
+                              !authService.isAuthenticated) {
+                            LoginRequiredDialog.show(
+                              context,
+                              'dodavanje omiljenih pjesama',
+                            );
                             return;
                           }
                           model.toggleFavorite();
                         },
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
                                 model.isFavorite(model.currentSongDisplay)
-                                  ? Icons.favorite
-                                  : Icons.favorite_border,
-                                color: model.isFavorite(model.currentSongDisplay)
-                                  ? Colors.white
-                                  : isDarkMode ? AppTheme.textSecondary : const Color(0xFF6D6D70),
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                                color:
+                                    model.isFavorite(model.currentSongDisplay)
+                                    ? Colors.white
+                                    : isDarkMode
+                                    ? AppTheme.textSecondary
+                                    : const Color(0xFF6D6D70),
                                 size: 16,
                               ),
                               const SizedBox(width: 6),
                               Text(
                                 model.isFavorite(model.currentSongDisplay)
-                                  ? 'Ukloni iz omiljenih'
-                                  : 'Dodaj u omiljene',
+                                    ? 'Ukloni iz omiljenih'
+                                    : 'Dodaj u omiljene',
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: model.isFavorite(model.currentSongDisplay)
-                                    ? Colors.white
-                                    : const Color(0xFF6D6D70),
+                                  color:
+                                      model.isFavorite(model.currentSongDisplay)
+                                      ? Colors.white
+                                      : const Color(0xFF6D6D70),
                                   letterSpacing: -0.1,
                                 ),
                               ),
@@ -278,7 +329,7 @@ class CurrentlyPlayingCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
-              
+
               // View favorites button
               Container(
                 width: double.infinity,
@@ -303,7 +354,10 @@ class CurrentlyPlayingCard extends StatelessWidget {
                       );
                     },
                     child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
