@@ -57,7 +57,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
     
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: const Color(0xFFF2F2F7),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Statistike'),
         leading: IconButton(
@@ -351,7 +351,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
             child: ElevatedButton.icon(
               onPressed: () => Navigator.pushNamed(context, '/ether-messages'),
               icon: const Icon(Icons.leaderboard_outlined, size: 20),
-              label: const Text('Otvori Poruke'),
+              label: const Text('Otvori Muzičku želju'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primary,
                 foregroundColor: Colors.white,

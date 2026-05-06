@@ -47,7 +47,7 @@ class CommonFooter extends StatelessWidget {
               ),
               FooterButton(
                 icon: Icons.message_outlined,
-                label: 'Poruke',
+                label: 'Muzička želja',
                 isActive: currentRoute == '/ether-messages',
                 isDark: isDark,
                 onTap: () {

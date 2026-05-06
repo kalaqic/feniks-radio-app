@@ -105,7 +105,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: isDarkMode ? AppTheme.background : const Color(0xFFF2F2F7),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text(
           'Moj profil',

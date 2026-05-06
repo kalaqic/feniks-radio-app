@@ -212,6 +212,25 @@ class _BadgeEarnedModalState extends State<BadgeEarnedModal>
                 ),
                 textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: Text(
+                  '+${widget.badge['points'] ?? 0} bodova',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
               const SizedBox(height: 28),
               
               // See All Badges Button

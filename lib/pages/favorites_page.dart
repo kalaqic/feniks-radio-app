@@ -23,7 +23,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
     final favoriteSongs = model.favoriteSongs;
 
     return Scaffold(
-      backgroundColor: isDarkMode ? AppTheme.background : const Color(0xFFF2F2F7),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text(
           'Omiljene Pjesme',

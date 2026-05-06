@@ -17,6 +17,7 @@ import 'pages/statistics_page.dart';
 import 'pages/welcome_page.dart';
 import 'pages/login_page.dart';
 import 'widgets/loading_screen.dart';
+import 'widgets/app_background_layer.dart';
 import 'utils/page_transitions.dart';
 
 Future<void> main() async {
@@ -49,6 +50,18 @@ class FeniksApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           navigatorKey: navigatorKey,
           theme: themeProvider.currentTheme,
+          builder: (context, child) {
+            if (child == null) {
+              return const SizedBox.shrink();
+            }
+            return Stack(
+              children: [
+                const Positioned.fill(child: AppBackgroundLayer()),
+                Positioned.fill(child: child),
+                const Positioned.fill(child: AppBackgroundOverlay()),
+              ],
+            );
+          },
           initialRoute: '/',
           onGenerateRoute: (RouteSettings settings) {
             switch (settings.name) {

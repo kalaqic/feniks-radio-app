@@ -35,7 +35,7 @@ class _SettingsPageState extends State<SettingsPage> {
     
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: model.isDarkMode ? AppTheme.background : Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         leading: IconButton(
           padding: const EdgeInsets.only(left: 12),

@@ -189,9 +189,7 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: const HeaderWithVolume(),
-      backgroundColor: isDarkMode
-          ? AppTheme.background
-          : const Color(0xFFF2F2F7),
+      backgroundColor: Colors.transparent,
       body: Container(
         decoration: BoxDecoration(
           gradient: isDarkMode

@@ -66,7 +66,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
     
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: isDarkMode ? AppTheme.background : const Color(0xFFF2F2F7),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text(
           'Feniks Leaderboard',

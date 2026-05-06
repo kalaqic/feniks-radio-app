@@ -70,7 +70,7 @@ class EtherMessagesCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Poruke',
+                          'Muzička želja',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,

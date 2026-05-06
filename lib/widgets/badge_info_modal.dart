@@ -123,11 +123,11 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
               const SizedBox(height: 24),
               
               // Achievement examples
-              _buildAchievementExample('⏰', 'Prvi Sat', 'Slušaj više od sata vremena', isDarkMode),
+              _buildAchievementExample('⏰', 'Prvi Sat', 'Slušaj više od sata vremena', 50, isDarkMode),
               const SizedBox(height: 12),
-              _buildAchievementExample('🏆', 'Mjesečni Prvak', 'Završi prvi na ljestvici', isDarkMode),
+              _buildAchievementExample('🏆', 'Mjesečni Prvak', 'Završi prvi na ljestvici', 500, isDarkMode),
               const SizedBox(height: 12),
-              _buildAchievementExample('💝', 'Ljubitelj Muzike', 'Dodaj 10 pjesama u omiljene', isDarkMode),
+              _buildAchievementExample('💝', 'Ljubitelj Muzike', 'Dodaj 10 pjesama u omiljene', 150, isDarkMode),
               const SizedBox(height: 24),
               
               // Tips section
@@ -164,7 +164,7 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '• Značke se automatski dodjeljuju kada ispunite uslove\n• Možete pregledati sve dostupne značke\n• Značke pokazuju vašu posvećenost radiju',
+                      '• Značke se automatski dodjeljuju kada ispunite uslove\n• Svaka značka donosi bodove koji su prikazani uz nju\n• Što je izazov duži i teži, nagrada u bodovima je veća',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.white.withValues(alpha: 0.95),
@@ -216,7 +216,7 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
     );
   }
 
-  Widget _buildAchievementExample(String icon, String name, String description, bool isDarkMode) {
+  Widget _buildAchievementExample(String icon, String name, String description, int points, bool isDarkMode) {
     return Row(
       children: [
         Container(
@@ -252,6 +252,15 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '$points bodova',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white.withValues(alpha: 0.98),
                 ),
               ),
             ],

@@ -42,7 +42,7 @@ class _BadgesPageState extends State<BadgesPage> {
     final allBadges = model.allBadges;
 
     return Scaffold(
-      backgroundColor: isDarkMode ? AppTheme.background : const Color(0xFFF2F2F7),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text(
           'Značke',
