@@ -178,12 +178,16 @@ class FirestoreService {
     required String displayName,
     required String message,
     required double amountEur,
+    String? paymentIntentId,
+    String paymentStatus = 'paid',
   }) async {
     await _messageRequests.add({
       'uid': uid,
       'displayName': displayName.trim().isEmpty ? 'Anonim' : displayName.trim(),
       'message': message.trim(),
       'amountEur': amountEur,
+      if (paymentIntentId != null) 'paymentIntentId': paymentIntentId,
+      'paymentStatus': paymentStatus,
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
     });

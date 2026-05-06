@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../services/vercel_stripe_payment_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../widgets/common_footer.dart';
@@ -61,21 +62,35 @@ class _EtherMessagesPageState extends State<EtherMessagesPage> with TickerProvid
     }
     setState(() => _isSending = true);
     try {
+      final payment = await VercelStripePaymentService.instance.pay(
+        uid: user.uid,
+        amountEur: _amount,
+      );
+      if (!payment.success) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Plaćanje je otkazano.')),
+        );
+        return;
+      }
+
       await FirestoreService.instance.submitMessageRequest(
         uid: user.uid,
         displayName: user.displayName ?? 'Anonim',
         message: text,
         amountEur: _amount,
+        paymentIntentId: payment.paymentIntentId,
+        paymentStatus: 'paid',
       );
       if (!mounted) return;
       _messageController.clear();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Poruka poslana (${_amount.toStringAsFixed(2)} EUR).')),
       );
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Neuspješno slanje. Provjerite Firebase pravila.')),
+        SnackBar(content: Text('Neuspješno plaćanje/slanje: $e')),
       );
     } finally {
       if (mounted) setState(() => _isSending = false);

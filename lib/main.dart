@@ -7,6 +7,7 @@ import 'theme/theme_provider.dart';
 import 'models/radio_player_model.dart';
 import 'services/notification_service.dart';
 import 'services/auth_service.dart';
+import 'services/vercel_stripe_payment_service.dart';
 import 'pages/home_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/profile_page.dart';
@@ -30,6 +31,7 @@ Future<void> main() async {
   
   tz.initializeTimeZones();
   await NotificationService.instance.init();
+  await VercelStripePaymentService.instance.initialize();
   runApp(const FeniksApp());
 }
 

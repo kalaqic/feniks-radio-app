@@ -1,0 +1,7 @@
+{
+  "name": "feniksflutter-vercel-api",
+  "private": true,
+  "dependencies": {
+    "stripe": "^16.12.0"
+  }
+}
