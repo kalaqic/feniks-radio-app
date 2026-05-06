@@ -26,7 +26,7 @@ module.exports = async (req, res) => {
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency: "eur",
-      automatic_payment_methods: {enabled: true},
+      payment_method_types: ["card"],
       metadata: {
         uid,
         source: "feniks_flutter_music_request",

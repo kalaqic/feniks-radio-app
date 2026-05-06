@@ -23,12 +23,10 @@ import 'utils/page_transitions.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
   tz.initializeTimeZones();
   await NotificationService.instance.init();
   await VercelStripePaymentService.instance.initialize();

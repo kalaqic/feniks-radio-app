@@ -78,7 +78,7 @@ class VercelStripePaymentService {
         paymentIntentClientSecret: clientSecret,
         merchantDisplayName: 'Muzička želja',
         style: ThemeMode.system,
-        allowsDelayedPaymentMethods: true,
+        allowsDelayedPaymentMethods: false,
       ),
     );
 
