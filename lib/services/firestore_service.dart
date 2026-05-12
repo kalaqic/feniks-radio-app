@@ -172,24 +172,50 @@ class FirestoreService {
     }, SetOptions(merge: true));
   }
 
-  /// Create a paid song/message request.
+  /// Returns the timestamp of this user's most recent message, or null if none.
+  /// Reads a single field on `users/{uid}` so no composite index is required.
+  Future<DateTime?> getLastMessageAt(String uid) async {
+    final doc = await _users.doc(uid).get();
+    final data = doc.data();
+    if (data == null) return null;
+    final ts = data['lastMessageAt'];
+    if (ts is Timestamp) return ts.toDate();
+    return null;
+  }
+
+  /// Create a song/message request and stamp the user's last-message time.
+  /// Throws [RateLimitedException] when the user has sent a message in the
+  /// last [cooldown] (default 10 minutes).
   Future<void> submitMessageRequest({
     required String uid,
     required String displayName,
     required String message,
-    required double amountEur,
-    String? paymentIntentId,
-    String paymentStatus = 'paid',
+    Duration cooldown = const Duration(minutes: 10),
   }) async {
+    final last = await getLastMessageAt(uid);
+    if (last != null) {
+      final elapsed = DateTime.now().difference(last);
+      if (elapsed < cooldown) {
+        throw RateLimitedException(cooldown - elapsed);
+      }
+    }
+
     await _messageRequests.add({
       'uid': uid,
       'displayName': displayName.trim().isEmpty ? 'Anonim' : displayName.trim(),
       'message': message.trim(),
-      'amountEur': amountEur,
-      if (paymentIntentId != null) 'paymentIntentId': paymentIntentId,
-      'paymentStatus': paymentStatus,
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
     });
+
+    await _users.doc(uid).set({
+      'lastMessageAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
+}
+
+class RateLimitedException implements Exception {
+  RateLimitedException(this.remaining);
+  final Duration remaining;
 }

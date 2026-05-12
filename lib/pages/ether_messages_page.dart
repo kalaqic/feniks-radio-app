@@ -1,8 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
-import '../services/vercel_stripe_payment_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../widgets/common_footer.dart';
@@ -14,10 +15,17 @@ class EtherMessagesPage extends StatefulWidget {
   State<EtherMessagesPage> createState() => _EtherMessagesPageState();
 }
 
-class _EtherMessagesPageState extends State<EtherMessagesPage> with TickerProviderStateMixin {
+class _EtherMessagesPageState extends State<EtherMessagesPage>
+    with TickerProviderStateMixin {
+  static const Duration _cooldown = Duration(minutes: 10);
+
   final _messageController = TextEditingController();
-  double _amount = 2.5;
   bool _isSending = false;
+
+  Duration _remaining = Duration.zero;
+  Timer? _countdownTimer;
+  bool _initialCheckDone = false;
+
   late final AnimationController _bgController;
   late final Animation<double> _bgShift;
 
@@ -25,7 +33,6 @@ class _EtherMessagesPageState extends State<EtherMessagesPage> with TickerProvid
   void initState() {
     super.initState();
     _messageController.addListener(() {
-      // Rebuild to enable/disable the submit button as the input changes.
       if (mounted) setState(() {});
     });
     _bgController = AnimationController(
@@ -35,13 +42,60 @@ class _EtherMessagesPageState extends State<EtherMessagesPage> with TickerProvid
     _bgShift = Tween<double>(begin: -0.25, end: 0.25).animate(
       CurvedAnimation(parent: _bgController, curve: Curves.easeInOut),
     );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadInitialCooldown());
   }
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     _bgController.dispose();
     _messageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadInitialCooldown() async {
+    final auth = context.read<AuthService>();
+    final user = auth.user;
+    if (user == null) {
+      if (mounted) setState(() => _initialCheckDone = true);
+      return;
+    }
+    try {
+      final last = await FirestoreService.instance.getLastMessageAt(user.uid);
+      if (!mounted) return;
+      if (last != null) {
+        final elapsed = DateTime.now().difference(last);
+        if (elapsed < _cooldown) {
+          _startCountdown(_cooldown - elapsed);
+        }
+      }
+    } catch (_) {
+      // Ignore: rate-limit will be re-enforced on submit.
+    } finally {
+      if (mounted) setState(() => _initialCheckDone = true);
+    }
+  }
+
+  void _startCountdown(Duration remaining) {
+    _countdownTimer?.cancel();
+    setState(() => _remaining = remaining);
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final next = _remaining - const Duration(seconds: 1);
+      if (next <= Duration.zero) {
+        _countdownTimer?.cancel();
+        setState(() => _remaining = Duration.zero);
+      } else {
+        setState(() => _remaining = next);
+      }
+    });
+  }
+
+  String _formatRemaining(Duration d) {
+    final m = d.inMinutes;
+    final s = d.inSeconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
   Future<void> _submit() async {
@@ -60,37 +114,35 @@ class _EtherMessagesPageState extends State<EtherMessagesPage> with TickerProvid
       );
       return;
     }
+
     setState(() => _isSending = true);
     try {
-      final payment = await VercelStripePaymentService.instance.pay(
-        uid: user.uid,
-        amountEur: _amount,
-      );
-      if (!payment.success) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Plaćanje je otkazano.')),
-        );
-        return;
-      }
-
       await FirestoreService.instance.submitMessageRequest(
         uid: user.uid,
         displayName: user.displayName ?? 'Anonim',
         message: text,
-        amountEur: _amount,
-        paymentIntentId: payment.paymentIntentId,
-        paymentStatus: 'paid',
+        cooldown: _cooldown,
       );
       if (!mounted) return;
       _messageController.clear();
+      _startCountdown(_cooldown);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Poruka poslana (${_amount.toStringAsFixed(2)} EUR).')),
+        const SnackBar(content: Text('Poruka je poslana. Hvala vam!')),
+      );
+    } on RateLimitedException catch (e) {
+      if (!mounted) return;
+      _startCountdown(e.remaining);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Možete poslati novu poruku za ${_formatRemaining(e.remaining)}.',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Neuspješno plaćanje/slanje: $e')),
+        SnackBar(content: Text('Greška pri slanju poruke: $e')),
       );
     } finally {
       if (mounted) setState(() => _isSending = false);
@@ -102,16 +154,22 @@ class _EtherMessagesPageState extends State<EtherMessagesPage> with TickerProvid
     final themeProvider = context.watch<ThemeProvider>();
     final isDarkMode = themeProvider.isDarkMode;
     final titleColor = isDarkMode ? Colors.white : const Color(0xFF1F2937);
-    final subtitleColor = isDarkMode ? Colors.white.withValues(alpha: 0.8) : const Color(0xFF6B7280);
-    final cardColor = isDarkMode ? Colors.white.withValues(alpha: 0.07) : Colors.white.withValues(alpha: 0.92);
-    final textFieldFill = isDarkMode ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFF3F4F6);
-    final hintColor = isDarkMode ? Colors.white.withValues(alpha: 0.55) : const Color(0xFF9CA3AF);
-    final sliderInactive = isDarkMode ? Colors.white24 : const Color(0xFFD1D5DB);
-    final amountEmoji = _amount < 20
-        ? '🙂'
-        : _amount < 50
-            ? '🎶'
-            : '🔥';
+    final subtitleColor = isDarkMode
+        ? Colors.white.withValues(alpha: 0.8)
+        : const Color(0xFF6B7280);
+    final cardColor = isDarkMode
+        ? Colors.white.withValues(alpha: 0.07)
+        : Colors.white.withValues(alpha: 0.92);
+    final textFieldFill =
+        isDarkMode ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFF3F4F6);
+    final hintColor = isDarkMode
+        ? Colors.white.withValues(alpha: 0.55)
+        : const Color(0xFF9CA3AF);
+
+    final isCoolingDown = _remaining > Duration.zero;
+    final isSubmitDisabled = _isSending ||
+        isCoolingDown ||
+        _messageController.text.trim().isEmpty;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -130,7 +188,7 @@ class _EtherMessagesPageState extends State<EtherMessagesPage> with TickerProvid
         ),
         centerTitle: true,
       ),
-      body: Container(
+      body: SizedBox(
         width: double.infinity,
         child: AnimatedBuilder(
           animation: _bgShift,
@@ -158,7 +216,8 @@ class _EtherMessagesPageState extends State<EtherMessagesPage> with TickerProvid
                     height: 260,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: AppTheme.primary.withValues(alpha: isDarkMode ? 0.12 : 0.08),
+                      color: AppTheme.primary
+                          .withValues(alpha: isDarkMode ? 0.12 : 0.08),
                     ),
                   ),
                 ),
@@ -170,7 +229,8 @@ class _EtherMessagesPageState extends State<EtherMessagesPage> with TickerProvid
                     height: 300,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: AppTheme.primaryDark.withValues(alpha: isDarkMode ? 0.10 : 0.06),
+                      color: AppTheme.primaryDark
+                          .withValues(alpha: isDarkMode ? 0.10 : 0.06),
                     ),
                   ),
                 ),
@@ -181,236 +241,22 @@ class _EtherMessagesPageState extends State<EtherMessagesPage> with TickerProvid
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         const SizedBox(height: 20),
-                        Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [AppTheme.primary, AppTheme.primaryDark, AppTheme.accentDark],
-                            ),
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                            decoration: BoxDecoration(
-                              color: cardColor,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isDarkMode ? AppTheme.cardBorder : const Color(0xFFE5E7EB),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: (isDarkMode ? Colors.black : Colors.black12).withValues(alpha: 0.10),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 6),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Container(
-                                      width: 34,
-                                      height: 34,
-                                      decoration: BoxDecoration(
-                                        gradient: const LinearGradient(
-                                          colors: [AppTheme.primary, AppTheme.primaryDark],
-                                        ),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                        Icons.campaign_rounded,
-                                        color: Colors.white,
-                                        size: 18,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      'Muzička želja',
-                                      style: TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.w800,
-                                        color: titleColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Pošaljite pozdrav ili muzičku želju. Vaše poruke puštamo redom u programu.',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    height: 1.45,
-                                    color: subtitleColor,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
-                            ),
-                          ),
+                        _buildIntroCard(
+                          titleColor: titleColor,
+                          subtitleColor: subtitleColor,
+                          cardColor: cardColor,
+                          isDarkMode: isDarkMode,
                         ),
                         const SizedBox(height: 18),
-                        Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [AppTheme.primary, AppTheme.primaryDark, AppTheme.accentDark],
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Container(
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(
-                              color: cardColor,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: isDarkMode ? AppTheme.cardBorder : const Color(0xFFE5E7EB),
-                                width: 1,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: (isDarkMode ? Colors.black : Colors.black12).withValues(alpha: 0.12),
-                                  blurRadius: 18,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.headset_mic_rounded,
-                                      color: AppTheme.primary,
-                                      size: 22,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        'Muzička želja',
-                                        style: TextStyle(
-                                          fontSize: 20,
-                                          color: titleColor,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Minimalni iznos je 2.50 EUR',
-                                  style: TextStyle(fontSize: 14, color: subtitleColor),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 16),
-                                TextField(
-                                  controller: _messageController,
-                                  minLines: 2,
-                                  maxLines: 4,
-                                  style: TextStyle(color: titleColor),
-                                  decoration: InputDecoration(
-                                    labelText: 'Poruka ili muzička želja',
-                                    hintText: 'Npr. Pozdrav ekipi i može jedna pjesma...',
-                                    hintStyle: TextStyle(color: hintColor),
-                                    prefixIcon: Icon(Icons.edit_rounded, size: 18, color: hintColor),
-                                    filled: true,
-                                    fillColor: textFieldFill,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 14,
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(
-                                        color: isDarkMode ? AppTheme.cardBorder : const Color(0xFFD1D5DB),
-                                        width: 1,
-                                      ),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(
-                                        color: AppTheme.primary,
-                                        width: 1.5,
-                                      ),
-                                    ),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Iznos: ${_amount.toStringAsFixed(2)} EUR',
-                                  style: TextStyle(
-                                    color: titleColor,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                SliderTheme(
-                                  data: SliderTheme.of(context).copyWith(
-                                    trackHeight: 8,
-                                    thumbShape: _EmojiThumbShape(emoji: amountEmoji),
-                                  ),
-                                  child: SizedBox(
-                                    height: 44,
-                                    child: Slider(
-                                      value: _amount,
-                                      min: 2.5,
-                                      max: 100,
-                                      divisions: 39,
-                                      activeColor: AppTheme.primary,
-                                      inactiveColor: sliderInactive,
-                                      label: '${_amount.toStringAsFixed(2)} EUR',
-                                      onChanged: (v) => setState(() => _amount = v),
-                                    ),
-                                  ),
-                                ),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      '2.50 EUR',
-                                      style: TextStyle(fontSize: 12, color: subtitleColor),
-                                    ),
-                                    Text(
-                                      '100 EUR',
-                                      style: TextStyle(fontSize: 12, color: subtitleColor),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                SizedBox(
-                                  height: 48,
-                                  child: ElevatedButton(
-                                    onPressed: (_isSending || _messageController.text.trim().isEmpty)
-                                        ? null
-                                        : _submit,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppTheme.primary,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                    child: _isSending
-                                        ? const SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
-                                            ),
-                                          )
-                                        : const Text('Pošalji poruku'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                        _buildFormCard(
+                          titleColor: titleColor,
+                          subtitleColor: subtitleColor,
+                          cardColor: cardColor,
+                          textFieldFill: textFieldFill,
+                          hintColor: hintColor,
+                          isDarkMode: isDarkMode,
+                          isCoolingDown: isCoolingDown,
+                          isSubmitDisabled: isSubmitDisabled,
                         ),
                         const SizedBox(height: 120),
                       ],
@@ -422,54 +268,294 @@ class _EtherMessagesPageState extends State<EtherMessagesPage> with TickerProvid
           },
         ),
       ),
-      bottomNavigationBar: CommonFooter(currentRoute: '/ether-messages', isDark: isDarkMode),
+      bottomNavigationBar:
+          CommonFooter(currentRoute: '/ether-messages', isDark: isDarkMode),
     );
   }
-}
 
-class _EmojiThumbShape extends SliderComponentShape {
-  final String emoji;
-
-  const _EmojiThumbShape({required this.emoji});
-
-  @override
-  Size getPreferredSize(bool isEnabled, bool isDiscrete) => const Size(40, 40);
-
-  @override
-  void paint(
-    PaintingContext context,
-    Offset center, {
-    required Animation<double> activationAnimation,
-    required Animation<double> enableAnimation,
-    required bool isDiscrete,
-    required TextPainter labelPainter,
-    required RenderBox parentBox,
-    required SliderThemeData sliderTheme,
-    required TextDirection textDirection,
-    required double value,
-    required double textScaleFactor,
-    required Size sizeWithOverflow,
+  Widget _buildIntroCard({
+    required Color titleColor,
+    required Color subtitleColor,
+    required Color cardColor,
+    required bool isDarkMode,
   }) {
-    final canvas = context.canvas;
-    final borderColor = sliderTheme.thumbColor ?? AppTheme.primary;
-    final fillPaint = Paint()..color = Colors.white;
-    canvas.drawCircle(center, 15, fillPaint);
-
-    final borderPaint = Paint()
-      ..color = borderColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawCircle(center, 15, borderPaint);
-
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: emoji,
-        style: const TextStyle(fontSize: 16),
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppTheme.primary, AppTheme.primaryDark, AppTheme.accentDark],
+        ),
+        borderRadius: BorderRadius.circular(18),
       ),
-      textDirection: textDirection,
-    )..layout();
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDarkMode ? AppTheme.cardBorder : const Color(0xFFE5E7EB),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: (isDarkMode ? Colors.black : Colors.black12)
+                  .withValues(alpha: 0.10),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [AppTheme.primary, AppTheme.primaryDark],
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.campaign_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Muzička želja',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: titleColor,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Pošaljite pozdrav ili muzičku želju. Poruke puštamo redom u programu.',
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.45,
+                color: subtitleColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-    final emojiOffset = center - Offset(textPainter.width / 2, textPainter.height / 2 + 1);
-    textPainter.paint(canvas, emojiOffset);
+  Widget _buildFormCard({
+    required Color titleColor,
+    required Color subtitleColor,
+    required Color cardColor,
+    required Color textFieldFill,
+    required Color hintColor,
+    required bool isDarkMode,
+    required bool isCoolingDown,
+    required bool isSubmitDisabled,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppTheme.primary, AppTheme.primaryDark, AppTheme.accentDark],
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDarkMode ? AppTheme.cardBorder : const Color(0xFFE5E7EB),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: (isDarkMode ? Colors.black : Colors.black12)
+                  .withValues(alpha: 0.12),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.headset_mic_rounded,
+                  color: AppTheme.primary,
+                  size: 22,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Pošalji svoju poruku',
+                    style: TextStyle(
+                      fontSize: 20,
+                      color: titleColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Možete poslati jednu poruku svakih 10 minuta.',
+              style: TextStyle(fontSize: 13, color: subtitleColor),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _messageController,
+              minLines: 3,
+              maxLines: 6,
+              maxLength: 280,
+              enabled: !isCoolingDown,
+              style: TextStyle(color: titleColor),
+              decoration: InputDecoration(
+                labelText: 'Poruka ili muzička želja',
+                hintText: 'Npr. Pozdrav ekipi i može jedna pjesma...',
+                hintStyle: TextStyle(color: hintColor),
+                prefixIcon: Icon(Icons.edit_rounded, size: 18, color: hintColor),
+                filled: true,
+                fillColor: textFieldFill,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 14,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDarkMode
+                        ? AppTheme.cardBorder
+                        : const Color(0xFFD1D5DB),
+                    width: 1,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                    color: AppTheme.primary,
+                    width: 1.5,
+                  ),
+                ),
+                disabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDarkMode
+                        ? AppTheme.cardBorder
+                        : const Color(0xFFE5E7EB),
+                    width: 1,
+                  ),
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            if (isCoolingDown) _buildCooldownBanner(isDarkMode: isDarkMode),
+            const SizedBox(height: 4),
+            SizedBox(
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: isSubmitDisabled ? null : _submit,
+                icon: _isSending
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(
+                        isCoolingDown
+                            ? Icons.timer_outlined
+                            : Icons.send_rounded,
+                        size: 18,
+                      ),
+                label: Text(
+                  isCoolingDown
+                      ? 'Sačekajte ${_formatRemaining(_remaining)}'
+                      : 'Pošalji poruku',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: isDarkMode
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : const Color(0xFFE5E7EB),
+                  disabledForegroundColor: isDarkMode
+                      ? Colors.white.withValues(alpha: 0.6)
+                      : const Color(0xFF6B7280),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            if (!_initialCheckDone) ...[
+              const SizedBox(height: 12),
+              Center(
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: subtitleColor,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCooldownBanner({required bool isDarkMode}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppTheme.primary.withValues(alpha: isDarkMode ? 0.18 : 0.10),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: AppTheme.primary.withValues(alpha: 0.35),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.hourglass_top_rounded,
+                size: 18, color: AppTheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Sljedeću poruku možete poslati za ${_formatRemaining(_remaining)}.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDarkMode ? Colors.white : const Color(0xFF1F2937),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
