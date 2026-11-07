@@ -23,9 +23,7 @@ A web page for accounts listed in the Firestore `admins` collection (document ID
 - the user list with each user's achievements
 
 ```bash
-flutter run -d chrome -t lib/admin/admin_main.dart          # run locally
-flutter build web -t lib/admin/admin_main.dart              # build
-firebase deploy --only hosting --project feniks-9cda4       # publish
+https://feniks-9cda4.web.app/
 ```
 
 ## Setup
