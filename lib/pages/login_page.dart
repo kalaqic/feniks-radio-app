@@ -99,16 +99,7 @@ class _LoginPageState extends State<LoginPage> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.chevron_left,
-            color: isDarkMode
-                ? Colors.white
-                : Theme.of(context).colorScheme.primary,
-            size: 32,
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        automaticallyImplyLeading: false,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
