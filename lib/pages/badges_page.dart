@@ -79,11 +79,9 @@ class _BadgesPageState extends State<BadgesPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header Stats
               _buildStatsCard(earned.length, model.allAchievements.length),
               const SizedBox(height: 24),
 
-              // Earned Badges Section
               if (earned.isNotEmpty) ...[
                 _buildSectionTitle(
                   'Osvojene Značke',
@@ -97,7 +95,6 @@ class _BadgesPageState extends State<BadgesPage> {
                 const SizedBox(height: 32),
               ],
 
-              // All Badges by Section
               for (final MapEntry(key: category, value: badges)
                   in model.achievementsByCategory.entries)
                 Column(
@@ -114,7 +111,7 @@ class _BadgesPageState extends State<BadgesPage> {
                     const SizedBox(height: 24),
                   ],
                 ),
-              const SizedBox(height: 120), // Space for bottom nav
+              const SizedBox(height: 120),
             ],
           ),
         ),
@@ -280,7 +277,6 @@ class _BadgesPageState extends State<BadgesPage> {
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Badge icon
                 Container(
                   width: 50,
                   height: 50,
@@ -306,7 +302,6 @@ class _BadgesPageState extends State<BadgesPage> {
                 ),
                 const SizedBox(height: 8),
 
-                // Badge name
                 Expanded(
                   child: Text(
                     badge.name,
@@ -472,7 +467,6 @@ class _BadgesPageState extends State<BadgesPage> {
     );
   }
 
-  /// "danas", "juče", "prije 3 dana" or the date.
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final days = DateTime.utc(

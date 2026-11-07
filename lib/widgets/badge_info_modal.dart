@@ -68,12 +68,11 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
               ),
             ],
           ),
-          // Scrollable so the content fits on smaller screens.
+
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Header with icon
                 Container(
                   width: 80,
                   height: 80,
@@ -96,7 +95,6 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                 ),
                 const SizedBox(height: 24),
 
-                // Title
                 const Text(
                   'Sistem Značaka',
                   style: TextStyle(
@@ -108,7 +106,6 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                 ),
                 const SizedBox(height: 16),
 
-                // Description
                 const Text(
                   'Osvajajte značke slušanjem Feniks Radija i ispunjavanjem različitih izazova!',
                   style: TextStyle(
@@ -121,7 +118,6 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                 ),
                 const SizedBox(height: 24),
 
-                // Achievement examples
                 _buildAchievementExample(
                   '⏰',
                   'Prvi Sat',
@@ -147,7 +143,6 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                 ),
                 const SizedBox(height: 24),
 
-                // Tips section
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -193,7 +188,6 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                 ),
                 const SizedBox(height: 28),
 
-                // Continue Button
                 Container(
                   width: double.infinity,
                   height: 48,

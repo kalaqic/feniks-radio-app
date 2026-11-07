@@ -20,16 +20,7 @@ export 'achievement.dart';
 export 'achievements.dart';
 export 'progress_rules.dart';
 
-/// The state the screens work with: the radio player, the song that is
-/// playing, settings and the user's progress.
-///
-/// The actual work is done by smaller parts:
-///  * [ListeningProgress] – listening time, streaks, favorites, achievements
-///  * [ProgressSync] – saving progress and the leaderboard entry to Firestore
-///  * [AppSettings] – settings stored on the device
 class RadioPlayerModel extends ChangeNotifier {
-  /// [clock] and the `enable*` flags exist so the logic can be tested without
-  /// audio, network, Firebase or a real clock.
   RadioPlayerModel({
     DateTime Function()? clock,
     bool enableSync = true,
@@ -47,11 +38,6 @@ class RadioPlayerModel extends ChangeNotifier {
   final AppSettings _settings;
   late final ProgressSync _sync;
 
-  // ===========================================================================
-  // Player
-  // ===========================================================================
-
-  // Created on first use, so tests never touch the audio plugin.
   AudioPlayer? _playerInstance;
   AudioPlayer get _player => _playerInstance ??= AudioPlayer();
   MetadataService? _metadataInstance;
@@ -64,8 +50,6 @@ class RadioPlayerModel extends ChangeNotifier {
   Future<void> init() async {
     await _settings.load();
     if (_settings.persist && _settings.notificationsEnabled) {
-      // Re-schedule the daily reminders (keeps the rotation going and the time
-      // right after DST changes). Not awaited: must not delay the app start.
       unawaited(
         NotificationService.instance
             .scheduleDailyReminders(
@@ -96,8 +80,6 @@ class RadioPlayerModel extends ChangeNotifier {
   bool get playing => _player.playing;
 
   Future<void> play() async {
-    // just_audio's play() completes only when playback stops, so it is not
-    // awaited; listening is tracked by the ticker instead.
     unawaited(
       _player.play().catchError((Object e) => logError('Playing audio', e)),
     );
@@ -106,17 +88,11 @@ class RadioPlayerModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> pause() async {
-    await _player.pause();
-    _progress.endSession();
-  }
-
   Future<void> stop() async {
     await _player.stop();
     _progress.endSession();
   }
 
-  /// Real listening time of the current session (buffering excluded).
   Duration get currentSessionDuration => _progress.currentSession;
 
   void _startTicker() {
@@ -125,9 +101,6 @@ class RadioPlayerModel extends ChangeNotifier {
     });
   }
 
-  /// True while audio is really coming out. On iOS a live stream can report
-  /// "buffering" the whole time it plays, so "buffering" also counts when the
-  /// playback position keeps moving.
   bool _isListeningNow() {
     final state = _player.processingState;
     final position = _player.position;
@@ -147,16 +120,14 @@ class RadioPlayerModel extends ChangeNotifier {
   void _tick({required bool listening, required bool playerPlaying}) {
     final wasListening = _progress.isSessionActive;
     _progress.tick(listening: listening, playerPlaying: playerPlaying);
-    // The song that is playing when a session starts counts as heard.
+
     if (!wasListening && _progress.isSessionActive) _countCurrentSong();
   }
 
-  /// Simulates one timer tick (tests advance the clock themselves).
   @visibleForTesting
   void debugTick({required bool listening}) =>
       _tick(listening: listening, playerPlaying: listening);
 
-  /// Feeds now-playing data as if it came from the station (tests only).
   @visibleForTesting
   void debugSetSong(String title, String artist) =>
       _updateCurrentSong({'title': title, 'artist': artist});
@@ -169,10 +140,6 @@ class RadioPlayerModel extends ChangeNotifier {
     super.dispose();
   }
 
-  // ===========================================================================
-  // Song that is playing
-  // ===========================================================================
-
   String _currentSong = kFallbackTitle;
   String _currentArtist = kFallbackArtist;
   bool _isFetchingCurrentSong = false;
@@ -181,13 +148,11 @@ class RadioPlayerModel extends ChangeNotifier {
   String get currentArtist => _currentArtist;
   bool get isFetchingCurrentSong => _isFetchingCurrentSong;
 
-  /// True when there is no real song info (station jingle / fallback text).
   bool get isFallbackSong {
     final title = _currentSong.trim().toLowerCase();
     return title.isEmpty || title == kFallbackTitle.toLowerCase();
   }
 
-  /// "Title - Artist"; also the key under which favorites are stored.
   String get currentSongDisplay =>
       _currentArtist.isEmpty ? _currentSong : '$_currentSong - $_currentArtist';
 
@@ -204,7 +169,7 @@ class RadioPlayerModel extends ChangeNotifier {
 
   void _updateCurrentSong(Map<String, String> metadata) {
     if (metadata.isEmpty) return;
-    // Same formatting as on screen, so favorites match what the user sees.
+
     _currentSong = TextFormatting.formatTitle(
       metadata['title'] ?? kFallbackTitle,
     );
@@ -220,16 +185,10 @@ class RadioPlayerModel extends ChangeNotifier {
     if (!isFallbackSong) _progress.songHeard(currentSongDisplay);
   }
 
-  // ===========================================================================
-  // Favorites
-  // ===========================================================================
-
   List<String> get favoriteSongs => _progress.favorites;
 
   bool isFavorite(String song) => _progress.isFavorite(song);
 
-  /// Adds or removes the song that is playing. The station jingle (no song
-  /// info) can't be added.
   void toggleFavorite() {
     final song = currentSongDisplay;
     if (_progress.isFavorite(song)) {
@@ -241,30 +200,22 @@ class RadioPlayerModel extends ChangeNotifier {
 
   void removeFavorite(String song) => _progress.removeFavorite(song);
 
-  // ===========================================================================
-  // Progress, points and achievements
-  // ===========================================================================
-
-  int get todayListeningSeconds => _progress.todaySeconds;
   int get todayListeningMinutes => _progress.todayMinutes;
   int get totalListeningMinutes => _progress.totalMinutes;
   int get totalListeningDays => _progress.listeningDays;
   int get sessionCount => _progress.sessionCount;
 
-  /// Days in a row with listening (0 when a day was missed).
   int get consecutiveDays => _progress.streak;
 
   int get listeningPoints => _progress.listeningPoints;
   int get achievementPoints => _progress.achievementPoints;
   int get totalFeniksPoints => _progress.totalPoints;
 
-  /// Called right after an achievement is unlocked (used for the popup).
   void Function(EarnedAchievement earned)? onAchievementEarned;
 
   List<Achievement> get allAchievements => Achievements.all;
   List<EarnedAchievement> get earnedAchievements => _progress.earned;
 
-  /// All achievements per category, in display order.
   Map<AchievementCategory, List<Achievement>> get achievementsByCategory => {
     for (final category in AchievementCategory.values)
       category: [
@@ -276,29 +227,18 @@ class RadioPlayerModel extends ChangeNotifier {
   bool hasAchievement(Achievement achievement) =>
       _progress.hasAchievement(achievement);
 
-  /// Unlocked achievements whose popup has not been shown yet.
-  bool get hasPendingAchievements => _progress.pending.isNotEmpty;
   Achievement? get nextPendingAchievement =>
       _progress.pending.isEmpty ? null : _progress.pending.first;
 
   void markAchievementShown(Achievement achievement) =>
       _progress.markShown(achievement);
 
-  /// Unlocks everything the current progress already qualifies for.
   void checkAchievements() => _progress.checkAll();
 
-  /// Counts a page visit (for the "Istraživač Aplikacije" achievement).
   void trackPageVisit(String route) => _progress.pageVisited(route);
 
-  // ===========================================================================
-  // Loading and saving the user's progress
-  // ===========================================================================
-
-  /// Firebase uid whose progress is loaded (null = not loaded yet).
   String? get loadedUserId => _sync.loadedUserId;
 
-  /// Loads the saved progress of [uid] ([data] is null for new users).
-  /// Listening done before the data loaded is added on top, so it's not lost.
   void loadUserProgress(String uid, Map<String, dynamic>? data) {
     final unsaved = _sync.loadedUserId == null ? _progress.snapshot() : null;
     _progress.loadJson(data ?? const {});
@@ -307,25 +247,16 @@ class RadioPlayerModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Clears all progress (logout / account deletion). Nothing is saved until
-  /// the next [loadUserProgress].
   void resetProgress() {
     _sync.loadedUserId = null;
     _progress.reset();
   }
 
-  /// The progress as it is saved in Firestore.
   Map<String, dynamic> progressToJson() => _progress.toJson();
 
-  /// Saves progress and the leaderboard entry now (no-op when logged out).
   Future<void> syncNow() => _sync.save();
 
-  /// Waits until a save that is already running has finished.
   Future<void> waitForPendingSync() => _sync.waitForPending();
-
-  // ===========================================================================
-  // Settings and one-time UI state
-  // ===========================================================================
 
   bool get notificationsEnabled => _settings.notificationsEnabled;
   set notificationsEnabled(bool value) {
@@ -363,8 +294,6 @@ class RadioPlayerModel extends ChangeNotifier {
 
   bool _autoPlayHandled = false;
 
-  /// True only the first time it is asked in an app launch, and only when
-  /// auto-play is on (so returning to the home page doesn't restart the radio).
   bool takeAutoPlay() {
     if (_autoPlayHandled) return false;
     _autoPlayHandled = true;
@@ -373,7 +302,6 @@ class RadioPlayerModel extends ChangeNotifier {
 
   bool _celebrationShown = false;
 
-  /// The welcome popup is shown once per app launch.
   bool get shouldShowCelebration => !_celebrationShown;
 
   void markCelebrationShown() {

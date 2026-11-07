@@ -10,7 +10,6 @@ class NotificationService {
   static final instance = NotificationService._();
   final _plugin = FlutterLocalNotificationsPlugin();
 
-  /// Daily reminders. One per day, in rotation (20 days, then again).
   static const List<(String, String)> dailyMessages = [
     ('Pogodi šta upravo svira 🎶', 'Imamo osjećaj da će ti se svidjeti…'),
     ('Ovo nisi očekivao/la danas 👀', 'Uključi se i saznaj zašto svi slušaju.'),
@@ -51,7 +50,7 @@ class NotificationService {
 
   Future<void> init() async {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    // Permission is asked only when the user turns reminders on.
+
     const ios = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,
@@ -71,7 +70,6 @@ class NotificationService {
     await _plugin.initialize(
       init,
       onDidReceiveNotificationResponse: (resp) {
-        // Open the player when the user taps the reminder
         navigatorKey.currentState?.pushNamedAndRemoveUntil(
           Routes.home,
           (route) => false,
@@ -80,11 +78,9 @@ class NotificationService {
     );
   }
 
-  /// Reminders use ids 1001..1030 (one per day for the next 30 days).
   static const int _firstReminderId = 1001;
   static const int _daysScheduledAhead = 30;
 
-  /// Asks the user for permission to show notifications. Returns true if allowed.
   Future<bool> requestPermission() async {
     try {
       final android = _plugin
@@ -130,7 +126,6 @@ class NotificationService {
     }
   }
 
-  /// Which message is shown on a given day (rotates through all of them).
   static (String, String) messageForDay(DateTime day) {
     final dayNumber = DateTime.utc(
       day.year,
@@ -140,14 +135,11 @@ class NotificationService {
     return dailyMessages[dayNumber % dailyMessages.length];
   }
 
-  /// Schedules one reminder per day at [hour]:[minute] for the next 30 days,
-  /// each with the message of that day. Called again on every app start, so
-  /// the schedule keeps rolling forward (and stays right after DST changes).
   Future<void> scheduleDailyReminders({
     required int hour,
     required int minute,
   }) async {
-    await cancelDailyReminders(); // replace existing
+    await cancelDailyReminders();
 
     const androidDetails = AndroidNotificationDetails(
       'feniks_daily',
@@ -167,7 +159,6 @@ class NotificationService {
     if (!first.isAfter(now)) first = first.add(const Duration(days: 1));
 
     for (var i = 0; i < _daysScheduledAhead; i++) {
-      // Built from date parts (not +24h) so the local time stays the same.
       final local = DateTime(
         first.year,
         first.month,
@@ -180,10 +171,10 @@ class NotificationService {
         _firstReminderId + i,
         title,
         body,
-        // tz.local is UTC in this app, so convert the local time explicitly.
+
         tz.TZDateTime.from(local, tz.UTC),
         details,
-        // Inexact: needs no special "alarms" permission on Android 12+.
+
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,

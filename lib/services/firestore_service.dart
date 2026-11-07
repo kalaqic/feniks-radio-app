@@ -24,7 +24,6 @@ class FirestoreService {
   static String _normalizeUsername(String name) =>
       name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
 
-  /// Returns true if this username is already taken.
   Future<bool> isUsernameTaken(String displayName) async {
     final key = _normalizeUsername(displayName);
     if (key.isEmpty) return true;
@@ -32,8 +31,6 @@ class FirestoreService {
     return doc.exists;
   }
 
-  /// Create or update user document and username lookup. Called after register.
-  /// Throws [UsernameTakenException] if this username is already taken.
   Future<void> createOrUpdateUser(
     String uid,
     String displayName, {
@@ -62,7 +59,6 @@ class FirestoreService {
     });
   }
 
-  /// Ensure minimal user profile exists after sign-in.
   Future<void> ensureUserProfile(
     String uid, {
     String? displayName,
@@ -78,7 +74,6 @@ class FirestoreService {
     }, SetOptions(merge: true));
   }
 
-  /// Save user achievements and progress to Firestore.
   Future<void> saveUserAchievements(
     String uid,
     Map<String, dynamic> achievementData,
@@ -89,8 +84,6 @@ class FirestoreService {
     }, SetOptions(merge: true));
   }
 
-  /// Get stored email for login by username. Returns null if not found.
-  /// Uses usernameLookup so unauthenticated users can log in.
   Future<String?> getEmailByUsername(String username) async {
     final key = _normalizeUsername(username);
     if (key.isEmpty) return null;
@@ -99,8 +92,6 @@ class FirestoreService {
     return doc.data()!['email'] as String?;
   }
 
-  /// Update this user's leaderboard entry. The points are split into
-  /// listening and badge points so the security rules can validate them.
   Future<void> updateLeaderboardEntry(
     String uid, {
     required String displayName,
@@ -118,7 +109,6 @@ class FirestoreService {
     });
   }
 
-  /// Top [limit] users by points descending.
   Future<List<LeaderboardEntry>> getLeaderboardTop({int limit = 3}) async {
     final query = await _leaderboard
         .orderBy('points', descending: true)
@@ -130,8 +120,6 @@ class FirestoreService {
     ];
   }
 
-  /// All-time rank of the current user (1-based), based on total points.
-  /// Uses an aggregate count so it does not download the whole leaderboard.
   Future<int?> getMyRank(int myPoints) async {
     final agg = await _leaderboard
         .where('points', isGreaterThan: myPoints)
@@ -140,7 +128,6 @@ class FirestoreService {
     return (agg.count ?? 0) + 1;
   }
 
-  /// Load user achievements from Firestore. Returns null if no document.
   Future<Map<String, dynamic>?> loadUserAchievements(String uid) async {
     final doc = await _users.doc(uid).get();
     if (!doc.exists || doc.data() == null) return null;
@@ -151,8 +138,6 @@ class FirestoreService {
     return null;
   }
 
-  /// Deletes everything stored about this user (profile, progress,
-  /// leaderboard entry and username). Used when the account is deleted.
   Future<void> deleteUserData(String uid, {String? displayName}) async {
     await _leaderboard.doc(uid).delete();
     if (displayName != null) {
@@ -161,14 +146,12 @@ class FirestoreService {
         try {
           await _usernameLookup.doc(key).delete();
         } catch (_) {
-          // Not this user's username entry; nothing to delete.
         }
       }
     }
     await _users.doc(uid).delete();
   }
 
-  /// Optional email the user chooses to display (not the login email). Null if not set.
   Future<String?> getUserDisplayEmail(String uid) async {
     final doc = await _users.doc(uid).get();
     if (!doc.exists || doc.data() == null) return null;
@@ -176,7 +159,6 @@ class FirestoreService {
     return (email != null && email.trim().isNotEmpty) ? email.trim() : null;
   }
 
-  /// Set or clear the optional display email. Pass null or empty to hide.
   Future<void> setUserDisplayEmail(String uid, String? displayEmail) async {
     final value = displayEmail != null && displayEmail.trim().isNotEmpty
         ? displayEmail.trim()

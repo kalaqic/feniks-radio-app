@@ -1,4 +1,3 @@
-/// Named routes of the app. Use these instead of string literals.
 abstract final class Routes {
   static const String loading = '/';
   static const String welcome = '/welcome';

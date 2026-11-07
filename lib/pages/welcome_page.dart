@@ -53,7 +53,6 @@ class _WelcomePageState extends State<WelcomePage> {
     super.dispose();
   }
 
-  /// Firebase requires email; we generate one so user only enters name + password.
   String _generateEmail(String name) {
     final safe = name.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
     return 'feniks_${safe}_${DateTime.now().millisecondsSinceEpoch}@feniks.app';
@@ -114,8 +113,6 @@ class _WelcomePageState extends State<WelcomePage> {
               email: email,
             );
           } on UsernameTakenException {
-            // Someone took the name in the meantime: remove the new account
-            // so it does not stay half-created.
             try {
               await authService.user?.delete();
             } catch (e) {
@@ -198,7 +195,7 @@ class _WelcomePageState extends State<WelcomePage> {
             fit: BoxFit.contain,
           ),
           const Spacer(flex: 2),
-          // Red button: create an account
+
           SizedBox(
             width: double.infinity,
             height: 56,

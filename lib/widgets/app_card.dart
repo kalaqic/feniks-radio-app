@@ -4,8 +4,6 @@ import 'package:provider/provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_provider.dart';
 
-/// Standard content card: rounded, with a light border and a soft shadow.
-/// Follows the light/dark theme automatically.
 class AppCard extends StatelessWidget {
   const AppCard({
     super.key,

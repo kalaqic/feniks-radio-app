@@ -2,11 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../widgets/app_background_layer.dart';
 
-/// Route that fades the new page in.
-///
-/// Every page is placed on top of its own [AppBackgroundLayer], so during the
-/// transition the new page fully covers the old one instead of showing it
-/// through its transparent background.
 class FadePageRoute<T> extends PageRouteBuilder<T> {
   FadePageRoute({
     required Widget page,

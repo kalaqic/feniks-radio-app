@@ -11,7 +11,6 @@ class ThemeProvider extends ChangeNotifier {
 
   bool _isDarkMode = false;
 
-  /// Restores the dark mode choice saved by the settings page.
   Future<void> _loadSavedTheme() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -29,7 +28,6 @@ class ThemeProvider extends ChangeNotifier {
 
   ThemeData get currentTheme => _isDarkMode ? darkTheme : lightTheme;
 
-  /// Switches the theme and remembers the choice on the device.
   void toggleTheme(bool isDark) {
     _isDarkMode = isDark;
     notifyListeners();

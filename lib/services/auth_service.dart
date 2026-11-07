@@ -7,40 +7,33 @@ import 'firestore_service.dart';
 class AuthService extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   User? _user;
-  bool _isLoading = false;
   String? _errorMessage;
 
   User? get user => _user;
-  bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _user != null;
 
   AuthService() {
-    // Listen to auth state changes
     _auth.authStateChanges().listen((User? user) {
       _user = user;
       notifyListeners();
     });
   }
 
-  // Sign up with email and password
   Future<bool> signUpWithEmailAndPassword({
     required String email,
     required String password,
     required String displayName,
   }) async {
     try {
-      _isLoading = true;
       _errorMessage = null;
       notifyListeners();
 
-      // Create user account
       final userCredential = await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
 
-      // Update display name
       if (userCredential.user != null && displayName.isNotEmpty) {
         await userCredential.user!.updateDisplayName(displayName);
         await userCredential.user!.reload();
@@ -55,30 +48,24 @@ class AuthService extends ChangeNotifier {
           logError('Saving user profile', e);
         }
       }
-
-      _isLoading = false;
       notifyListeners();
       return true;
     } on FirebaseAuthException catch (e) {
-      _isLoading = false;
       _errorMessage = _getErrorMessage(e.code);
       notifyListeners();
       return false;
     } catch (e) {
-      _isLoading = false;
       _errorMessage = 'Došlo je do greške. Pokušajte ponovo.';
       notifyListeners();
       return false;
     }
   }
 
-  // Sign in with email and password
   Future<bool> signInWithEmailAndPassword({
     required String email,
     required String password,
   }) async {
     try {
-      _isLoading = true;
       _errorMessage = null;
       notifyListeners();
 
@@ -99,23 +86,19 @@ class AuthService extends ChangeNotifier {
           logError('Saving user profile', e);
         }
       }
-      _isLoading = false;
       notifyListeners();
       return true;
     } on FirebaseAuthException catch (e) {
-      _isLoading = false;
       _errorMessage = _getErrorMessage(e.code);
       notifyListeners();
       return false;
     } catch (e) {
-      _isLoading = false;
       _errorMessage = 'Došlo je do greške. Pokušajte ponovo.';
       notifyListeners();
       return false;
     }
   }
 
-  // Sign out
   Future<void> signOut() async {
     try {
       await _auth.signOut();
@@ -127,14 +110,11 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  /// Permanently deletes the account after confirming the password.
-  /// Returns null on success, otherwise a message for the user.
   Future<String?> deleteAccount(String password) async {
     final user = _auth.currentUser;
     final email = user?.email;
     if (user == null || email == null) return 'Niste prijavljeni.';
     try {
-      _isLoading = true;
       notifyListeners();
       await user.reauthenticateWithCredential(
         EmailAuthProvider.credential(email: email, password: password),
@@ -151,43 +131,11 @@ class AuthService extends ChangeNotifier {
     } catch (_) {
       return 'Brisanje naloga nije uspjelo. Pokušajte ponovo.';
     } finally {
-      _isLoading = false;
       notifyListeners();
     }
   }
 
-  // Send password reset email
-  Future<bool> sendPasswordResetEmail(String email) async {
-    try {
-      _isLoading = true;
-      _errorMessage = null;
-      notifyListeners();
 
-      await _auth.sendPasswordResetEmail(email: email.trim());
-
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } on FirebaseAuthException catch (e) {
-      _isLoading = false;
-      _errorMessage = _getErrorMessage(e.code);
-      notifyListeners();
-      return false;
-    } catch (e) {
-      _isLoading = false;
-      _errorMessage = 'Došlo je do greške. Pokušajte ponovo.';
-      notifyListeners();
-      return false;
-    }
-  }
-
-  // Clear error message
-  void clearError() {
-    _errorMessage = null;
-    notifyListeners();
-  }
-
-  // Get user-friendly error messages
   String _getErrorMessage(String code) {
     switch (code) {
       case 'weak-password':

@@ -48,7 +48,6 @@ class LoginRequiredDialog extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Icon
               Container(
                 width: 64,
                 height: 64,
@@ -73,7 +72,6 @@ class LoginRequiredDialog extends StatelessWidget {
               ),
               const SizedBox(height: 20),
 
-              // Title
               const Text(
                 'Prijava potrebna',
                 style: TextStyle(
@@ -85,7 +83,6 @@ class LoginRequiredDialog extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              // Message
               Text(
                 'Da biste sačuvali svoj napredak u "$activityName", morate biti prijavljeni.',
                 style: TextStyle(
@@ -97,10 +94,8 @@ class LoginRequiredDialog extends StatelessWidget {
               ),
               const SizedBox(height: 24),
 
-              // Buttons
               Row(
                 children: [
-                  // Cancel button
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () => Navigator.of(context).pop(),
@@ -125,7 +120,6 @@ class LoginRequiredDialog extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
 
-                  // Login button
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
@@ -173,7 +167,6 @@ class LoginRequiredDialog extends StatelessWidget {
   }
 }
 
-// Helper extension to check auth and show dialog
 extension AuthCheck on BuildContext {
   bool requireAuth(String activityName) {
     final authService = Provider.of<AuthService>(this, listen: false);

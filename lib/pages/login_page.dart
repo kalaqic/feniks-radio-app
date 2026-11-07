@@ -119,7 +119,7 @@ class _LoginPageState extends State<LoginPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 40),
-                // Logo/Icon
+
                 Container(
                   width: 100,
                   height: 100,
@@ -139,7 +139,7 @@ class _LoginPageState extends State<LoginPage> {
                   child: const Icon(Icons.radio, color: Colors.white, size: 50),
                 ),
                 const SizedBox(height: 24),
-                // Title
+
                 Text(
                   'Prijava',
                   style: TextStyle(
@@ -159,7 +159,7 @@ class _LoginPageState extends State<LoginPage> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 40),
-                // Username field
+
                 TextFormField(
                   controller: _usernameController,
                   textCapitalization: TextCapitalization.none,
@@ -197,7 +197,7 @@ class _LoginPageState extends State<LoginPage> {
                   },
                 ),
                 const SizedBox(height: 16),
-                // Password field
+
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
@@ -247,7 +247,7 @@ class _LoginPageState extends State<LoginPage> {
                   },
                 ),
                 const SizedBox(height: 24),
-                // Submit button
+
                 Container(
                   height: 56,
                   decoration: BoxDecoration(

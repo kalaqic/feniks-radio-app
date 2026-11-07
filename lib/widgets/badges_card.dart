@@ -96,7 +96,6 @@ class BadgesCard extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // Progress bar
               LinearProgressIndicator(
                 value: percentage / 100,
                 backgroundColor: Colors.white.withValues(alpha: 0.3),
@@ -106,7 +105,6 @@ class BadgesCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              // Recent badges preview
               if (earned.isNotEmpty) ...[
                 Row(
                   children: [
@@ -121,7 +119,6 @@ class BadgesCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Row(
-                        // The three most recently unlocked
                         children: earned.reversed
                             .take(3)
                             .map(

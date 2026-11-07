@@ -83,7 +83,6 @@ class _CelebrationModalState extends State<CelebrationModal>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Celebration Icon
                       Container(
                         width: 80,
                         height: 80,
@@ -110,7 +109,6 @@ class _CelebrationModalState extends State<CelebrationModal>
                       ),
                       const SizedBox(height: 24),
 
-                      // Title
                       Text(
                         isFirstDay ? 'Dobrodošli!' : 'Dobrodošli natrag!',
                         style: const TextStyle(
@@ -123,7 +121,6 @@ class _CelebrationModalState extends State<CelebrationModal>
                       ),
                       const SizedBox(height: 12),
 
-                      // Subtitle
                       Text(
                         isFirstDay
                             ? 'Super početak! Danas je vaš prvi dan slušanja Feniks Radija.'
@@ -138,7 +135,6 @@ class _CelebrationModalState extends State<CelebrationModal>
                       ),
                       const SizedBox(height: 24),
 
-                      // Stats Row
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
@@ -165,7 +161,6 @@ class _CelebrationModalState extends State<CelebrationModal>
                       ),
                       const SizedBox(height: 24),
 
-                      // Motivational Text
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -195,7 +190,6 @@ class _CelebrationModalState extends State<CelebrationModal>
                       ),
                       const SizedBox(height: 32),
 
-                      // Continue Button
                       Container(
                         width: double.infinity,
                         height: 50,

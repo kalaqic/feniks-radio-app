@@ -18,7 +18,6 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  /// Current theme; the page rebuilds when it changes.
   bool get _isDarkMode => context.watch<ThemeProvider>().isDarkMode;
 
   @override
@@ -44,7 +43,7 @@ class _SettingsPageState extends State<SettingsPage> {
           padding: const EdgeInsets.only(left: 12),
           constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           icon: const Icon(Icons.chevron_left_rounded, size: 28),
-          // Settings is opened from the profile, so going back returns there.
+
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Postavke'),
@@ -57,7 +56,6 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               const SizedBox(height: 20),
 
-              // Appearance Section
               _buildSettingSection(
                 title: 'Izgled',
                 icon: Icons.palette_outlined,
@@ -75,7 +73,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
               const SizedBox(height: 20),
 
-              // Notifications Section
               _buildSettingSection(
                 title: 'Notifikacije',
                 icon: Icons.notifications_outlined,
@@ -97,7 +94,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
               const SizedBox(height: 20),
 
-              // Audio Section
               _buildSettingSection(
                 title: 'Audio',
                 icon: Icons.volume_up_outlined,
@@ -115,7 +111,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
               const SizedBox(height: 20),
 
-              // About Section
               _buildSettingSection(
                 title: 'O aplikaciji',
                 icon: Icons.info_outline,
@@ -543,7 +538,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             Expanded(
               child: ListView.builder(
-                itemCount: 12, // Every 5 minutes: 0, 5, 10, 15, ...
+                itemCount: 12,
                 itemBuilder: (context, index) {
                   final minute = index * 5;
                   return ListTile(
@@ -610,7 +605,6 @@ class _SettingsPageState extends State<SettingsPage> {
     await _scheduleReminder(model);
   }
 
-  /// Opens the mail app with our address, a subject and a short template.
   Future<void> _openFeedbackEmail() async {
     const subject = 'Feedback / prijedlog - Feniks Radio aplikacija';
     const body =
@@ -621,7 +615,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final uri = Uri(
       scheme: 'mailto',
       path: AppConfig.supportEmail,
-      // Encoded by hand: queryParameters would turn spaces into "+".
+
       query:
           'subject=${Uri.encodeComponent(subject)}'
           '&body=${Uri.encodeComponent(body)}',
@@ -648,7 +642,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final uri = Uri(
       scheme: 'mailto',
       path: AppConfig.supportEmail,
-      // Encoded by hand: queryParameters would turn spaces into "+".
+
       query: 'subject=${Uri.encodeComponent('Podrška - Feniks Radio')}',
     );
     launchUrl(uri);

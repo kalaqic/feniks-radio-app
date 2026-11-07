@@ -13,12 +13,7 @@ const _red = Color(0xFFFF3B30);
 const _gold = Color(0xFFFFD700);
 const _brand = Color(0xFFEB6556);
 
-/// Catalog of every achievement in the app.
-///
-/// Each achievement has a unique id, name and icon, and is unlocked in exactly
-/// one place in [ListeningProgress].
 abstract final class Achievements {
-  // First steps
   static const firstListen = Achievement(
     id: 'first_listen',
     name: 'Prvi Put',
@@ -36,12 +31,11 @@ abstract final class Achievements {
         'Posjeti sve stranice: Početna, Ljestvica, Značke, Omiljene, Profil i Postavke',
     icon: '🧭',
     color: _blue,
-    requirement: 6, // ProgressRules.explorablePages.length
+    requirement: 6,
     points: 50,
     category: AchievementCategory.firstSteps,
   );
 
-  // Daily listening (total within one day), in minutes
   static const firstHour = Achievement(
     id: 'first_hour',
     name: 'Prvi Sat',
@@ -73,8 +67,6 @@ abstract final class Achievements {
     category: AchievementCategory.dailyListening,
   );
 
-  // Without a pause (one uninterrupted session), in minutes.
-  // The ids are kept from older versions so saved progress still matches.
   static const halfHourNonStop = Achievement(
     id: 'quality_listener',
     name: 'Pola Sata u Komadu',
@@ -106,7 +98,6 @@ abstract final class Achievements {
     category: AchievementCategory.withoutPause,
   );
 
-  // Total listening, in minutes
   static const tenHours = Achievement(
     id: 'ten_hours',
     name: 'Deset Sati',
@@ -138,7 +129,6 @@ abstract final class Achievements {
     category: AchievementCategory.totalListening,
   );
 
-  // Sessions of at least ProgressRules.minMinutesForSession minutes
   static const tenSessions = Achievement(
     id: 'ten_sessions',
     name: 'Deset Sesija',
@@ -173,7 +163,6 @@ abstract final class Achievements {
     category: AchievementCategory.sessions,
   );
 
-  // Streaks (consecutive days)
   static const weekStreak = Achievement(
     id: 'daily_listener',
     name: 'Sedmica Zaredom',
@@ -215,7 +204,6 @@ abstract final class Achievements {
     category: AchievementCategory.streaks,
   );
 
-  // Listening days (in total, not necessarily in a row)
   static const sevenDays = Achievement(
     id: 'first_week',
     name: 'Sedam Dana Slušanja',
@@ -247,7 +235,6 @@ abstract final class Achievements {
     category: AchievementCategory.listeningDays,
   );
 
-  // Time of day: distinct days with some listening in that slot (see [timeSlots])
   static const midnightListener = Achievement(
     id: 'midnight_listener',
     name: 'Ponoćni Slušalac',
@@ -309,7 +296,6 @@ abstract final class Achievements {
     category: AchievementCategory.timeOfDay,
   );
 
-  // Weekend and work week
   static const weekendWarrior = Achievement(
     id: 'weekend_warrior',
     name: 'Vikend Ratnik',
@@ -332,7 +318,6 @@ abstract final class Achievements {
     category: AchievementCategory.weekendAndWorkweek,
   );
 
-  // Favorite songs (songs currently in favorites)
   static const musicLover = Achievement(
     id: 'music_lover',
     name: 'Ljubitelj Muzike',
@@ -374,7 +359,6 @@ abstract final class Achievements {
     category: AchievementCategory.favorites,
   );
 
-  // Discovery (different songs heard while listening)
   static const songDiscoverer = Achievement(
     id: 'song_discoverer',
     name: 'Otkrivač Pjesama',
@@ -396,7 +380,6 @@ abstract final class Achievements {
     category: AchievementCategory.discovery,
   );
 
-  // Groups used by the progress logic
   static const dailyListening = [firstHour, marathon, fiveHours];
   static const withoutPause = [halfHourNonStop, twoHoursNonStop, ultraMarathon];
   static const totalListening = [tenHours, fiftyHours, hundredHours];
@@ -419,7 +402,6 @@ abstract final class Achievements {
     nightOwl,
   ];
 
-  /// Time-of-day achievements with their hours: [from, to).
   static const List<(Achievement, int, int)> timeSlots = [
     (midnightListener, 0, 5),
     (earlyBird, 5, 8),
@@ -429,7 +411,6 @@ abstract final class Achievements {
     (nightOwl, 22, 24),
   ];
 
-  /// Every achievement, in display order.
   static const List<Achievement> all = [
     firstListen,
     appExplorer,
@@ -448,10 +429,8 @@ abstract final class Achievements {
 
   static final Map<String, Achievement> _byId = {for (final a in all) a.id: a};
 
-  /// The achievement with [id], or null if it no longer exists.
   static Achievement? byId(String id) => _byId[id];
 
-  /// The time-of-day achievement for an hour of the day (0–23).
   static Achievement timeSlotFor(int hour) {
     for (final (achievement, from, to) in timeSlots) {
       if (hour >= from && hour < to) return achievement;

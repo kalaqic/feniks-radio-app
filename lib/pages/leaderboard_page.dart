@@ -46,7 +46,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
     try {
       final auth = context.read<AuthService>();
       final model = context.read<RadioPlayerModel>();
-      // Push my latest points first so my rank is up to date.
+
       try {
         await model.syncNow().timeout(const Duration(seconds: 3));
       } catch (e) {
@@ -100,15 +100,13 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
               children: [
                 const SizedBox(height: 20),
 
-                // Personal Points Section
                 _buildPersonalPointsSection(model),
 
                 const SizedBox(height: 24),
 
-                // Feniks Points Leaderboard Section
                 _buildLeaderboardSection(),
 
-                const SizedBox(height: 120), // Space for bottom nav
+                const SizedBox(height: 120),
               ],
             ),
           ),
@@ -192,7 +190,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
             ],
           ),
           const SizedBox(height: 24),
-          // Breakdown: badges earned, badge points, minutes listened, listening points
+
           Row(
             children: [
               Expanded(
@@ -393,7 +391,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
           else ...[
             if (_leaderboard.length >= 3) _buildTopThreePodium(),
             if (_leaderboard.length > 3) const SizedBox(height: 24),
-            // With fewer than 3 users there is no podium, so list everyone.
+
             ...List.generate(
               _leaderboard.length >= 3
                   ? _leaderboard.length - 3
@@ -420,11 +418,10 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        // 2nd Place
         _buildPodiumPlace(_leaderboard[1], 2, 80, const Color(0xFFE5E7EB)),
-        // 1st Place
+
         _buildPodiumPlace(_leaderboard[0], 1, 100, const Color(0xFFFBBF24)),
-        // 3rd Place
+
         _buildPodiumPlace(_leaderboard[2], 3, 60, const Color(0xFFCD7F32)),
       ],
     );
@@ -627,7 +624,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
       case 3:
         return const Color(0xFFCD7F32);
       case 4:
-        return AppTheme.primary; // Current user highlight
+        return AppTheme.primary;
       default:
         return const Color(0xFF8E8E93);
     }

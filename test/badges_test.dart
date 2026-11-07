@@ -1,7 +1,3 @@
-// Tests for Feniks points and badges.
-//
-// The model is driven by a fake clock and simulated timer ticks, so days of
-// listening are checked in seconds. Run with: flutter test
 import 'package:feniksflutter/models/radio_player_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -11,10 +7,9 @@ class FakeClock {
   DateTime call() => now;
 }
 
-/// Small helper around the model that "listens" and moves time forward.
 class Sim {
   Sim([DateTime? start])
-    : clock = FakeClock(start ?? DateTime(2026, 1, 5, 9, 0)) /* Monday */ {
+    : clock = FakeClock(start ?? DateTime(2026, 1, 5, 9, 0))  {
     model = RadioPlayerModel(
       clock: clock.call,
       enableSync: false,
@@ -26,9 +21,8 @@ class Sim {
   final FakeClock clock;
   late final RadioPlayerModel model;
 
-  /// Plays the radio for [d] (one continuous session), then stops.
   void listen(Duration d, {bool stop = true}) {
-    model.debugTick(listening: true); // session starts
+    model.debugTick(listening: true);
     for (var i = 0; i < d.inSeconds; i++) {
       clock.now = clock.now.add(const Duration(seconds: 1));
       model.debugTick(listening: true);
@@ -41,13 +35,11 @@ class Sim {
     model.debugTick(listening: false);
   }
 
-  /// Jumps to [t] while not listening (the app timer keeps ticking).
   void goTo(DateTime t) {
     clock.now = t;
     model.debugTick(listening: false);
   }
 
-  /// Same time of day, [days] later.
   void nextDay([int days = 1]) {
     final n = clock.now;
     goTo(DateTime(n.year, n.month, n.day + days, n.hour, n.minute));
@@ -76,11 +68,11 @@ void main() {
       for (var i = 0; i < 100; i++) {
         s.listen(const Duration(seconds: 3));
       }
-      // Only the real listening time counts: 100 x 3 s = 5 minutes
+
       expect(s.model.totalListeningMinutes, 5);
       expect(s.model.listeningPoints, 10);
       expect(s.model.sessionCount, 0);
-      // Only "first listen" can be earned this way.
+
       expect(s.model.earnedAchievements.map((e) => e.id), ['first_listen']);
     });
 
@@ -89,7 +81,7 @@ void main() {
       s.model.debugTick(listening: true);
       for (var i = 0; i < 600; i++) {
         s.clock.now = s.clock.now.add(const Duration(seconds: 1));
-        s.model.debugTick(listening: false); // "stopped" -> nothing counted
+        s.model.debugTick(listening: false);
       }
       expect(s.model.totalListeningMinutes, 0);
     });
@@ -127,7 +119,7 @@ void main() {
 
     test('daily total resets at midnight', () {
       final s = Sim(DateTime(2026, 1, 5, 23, 30));
-      s.listen(min * 59); // 23:30 -> 00:29
+      s.listen(min * 59);
       expect(s.model.todayListeningMinutes, inInclusiveRange(28, 30));
       expect(s.has('first_hour'), isFalse);
     });
@@ -172,7 +164,7 @@ void main() {
       }
       expect(s.has('daily_listener'), isFalse);
       expect(s.model.totalListeningDays, 7);
-      expect(s.has('first_week'), isTrue); // 7 different days
+      expect(s.has('first_week'), isTrue);
     });
 
     test('less than 5 minutes does not count as a listening day', () {
@@ -186,7 +178,6 @@ void main() {
     });
 
     test('streak survives daylight saving changes', () {
-      // Clocks change on 29 March and 25 October 2026 in Europe.
       for (final start in [
         DateTime(2026, 3, 27, 9),
         DateTime(2026, 10, 23, 9),
@@ -211,7 +202,7 @@ void main() {
     test('time of day needs different days', () {
       final s = Sim(DateTime(2026, 1, 5, 6, 0));
       for (var i = 0; i < 5; i++) {
-        s.listen(min * 6); // same morning, 5 times
+        s.listen(min * 6);
       }
       expect(s.has('early_bird'), isFalse);
       for (var d = 0; d < 4; d++) {
@@ -225,13 +216,13 @@ void main() {
       final s = Sim(DateTime(2026, 1, 5, 21, 50));
       for (var d = 0; d < 5; d++) {
         s.goTo(DateTime(2026, 1, 5 + d, 21, 50));
-        s.listen(min * 20); // 21:50 -> 22:10
+        s.listen(min * 20);
       }
       expect(s.has('night_owl'), isTrue);
     });
 
     test('weekend warrior: 8 weekend days', () {
-      final s = Sim(DateTime(2026, 1, 10, 12, 0)); // Saturday
+      final s = Sim(DateTime(2026, 1, 10, 12, 0));
       for (var w = 0; w < 4; w++) {
         s.goTo(DateTime(2026, 1, 10 + w * 7, 12, 0));
         s.listen(min * 6);
@@ -242,9 +233,8 @@ void main() {
     });
 
     test('workweek needs Mon–Fri of the same week', () {
-      final s = Sim(DateTime(2026, 1, 6, 12, 0)); // Tuesday
+      final s = Sim(DateTime(2026, 1, 6, 12, 0));
       for (final day in [6, 7, 8, 9, 12]) {
-        // Tue..Fri and next Monday
         s.goTo(DateTime(2026, 1, day, 12, 0));
         s.listen(min * 6);
       }
@@ -267,7 +257,7 @@ void main() {
       }
       expect(s.model.favoriteSongs.length, 10);
       expect(s.has('music_lover'), isTrue);
-      // Removing and adding again does not award anything twice
+
       s.model.toggleFavorite();
       s.model.toggleFavorite();
       final ids = s.model.earnedAchievements.map((e) => e.id).toList();
@@ -280,7 +270,7 @@ void main() {
         s.model.debugSetSong('Pjesma $i', 'Izvođač');
       }
       expect(s.has('song_discoverer'), isFalse);
-      s.model.debugTick(listening: true); // start session
+      s.model.debugTick(listening: true);
       for (var i = 0; i < 50; i++) {
         s.model.debugSetSong('Pjesma $i', 'Izvođač');
       }
@@ -292,7 +282,7 @@ void main() {
       for (final p in ProgressRules.explorablePages.take(5)) {
         s.model.trackPageVisit(p);
       }
-      s.model.trackPageVisit('/ether-messages'); // removed page, ignored
+      s.model.trackPageVisit('/ether-messages');
       expect(s.has('app_explorer'), isFalse);
       s.model.trackPageVisit(ProgressRules.explorablePages.last);
       expect(s.has('app_explorer'), isTrue);
@@ -300,9 +290,9 @@ void main() {
 
     test('every badge can be earned, each exactly once', () {
       final s = Sim(DateTime(2026, 1, 5, 9, 0));
-      // One long day: 6 hours without a pause
+
       s.listen(const Duration(hours: 6));
-      // 180 days in a row, 34 minutes per day, rotating the time of day
+
       const slotStarts = [1, 6, 9, 13, 19, 22];
       for (var d = 1; d <= 180; d++) {
         final h = slotStarts[d % slotStarts.length];
@@ -327,7 +317,7 @@ void main() {
         (sum, a) => sum + a.points,
       );
       expect(s.model.achievementPoints, allPoints);
-      // Firestore rules allow at most this many badge points
+
       expect(allPoints, lessThanOrEqualTo(9500));
       expect(s.model.allAchievements.length, lessThanOrEqualTo(35));
     });
@@ -375,7 +365,7 @@ void main() {
       final data = saved.model.progressToJson();
 
       final s = Sim(saved.clock.now.add(const Duration(minutes: 5)));
-      s.listen(min * 15); // listened before the data loaded
+      s.listen(min * 15);
       s.model.loadUserProgress('u1', data);
       expect(s.model.totalListeningMinutes, 45);
       expect(s.model.todayListeningMinutes, 45);

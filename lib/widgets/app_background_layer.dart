@@ -14,10 +14,8 @@ class _AppBackgroundLayerState extends State<AppBackgroundLayer>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
-  /// The circles move with the wall clock, so every page's background is in
-  /// exactly the same position and nothing jumps during page transitions.
   double get _shiftValue {
-    const cycleMs = 16000; // 8 s forward + 8 s back
+    const cycleMs = 16000;
     final t = (DateTime.now().millisecondsSinceEpoch % cycleMs) / cycleMs;
     final triangle = t < 0.5 ? t * 2 : 2 - t * 2;
     return -0.25 + 0.5 * Curves.easeInOut.transform(triangle);
@@ -26,7 +24,7 @@ class _AppBackgroundLayerState extends State<AppBackgroundLayer>
   @override
   void initState() {
     super.initState();
-    // Only drives repaints; the position itself comes from [_shiftValue].
+
     _controller = AnimationController(
       duration: const Duration(seconds: 1),
       vsync: this,

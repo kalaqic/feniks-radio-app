@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../config/routes.dart';
 import '../models/achievement.dart';
 
-/// Popup shown when an achievement is unlocked.
 class BadgeEarnedModal extends StatefulWidget {
   const BadgeEarnedModal({
     super.key,
@@ -103,7 +102,6 @@ class _BadgeEarnedModalState extends State<BadgeEarnedModal>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Celebration text
                 const Text(
                   '🎉 Odličan posao! 🎉',
                   style: TextStyle(
@@ -115,16 +113,14 @@ class _BadgeEarnedModalState extends State<BadgeEarnedModal>
                 ),
                 const SizedBox(height: 24),
 
-                // Animated badge icon
                 Stack(
                   alignment: Alignment.center,
                   children: [
-                    // Rotating glow effect
                     AnimatedBuilder(
                       animation: _rotationController,
                       builder: (context, child) {
                         return Transform.rotate(
-                          angle: _rotationAnimation.value * 6.28, // 2π radians
+                          angle: _rotationAnimation.value * 6.28,
                           child: AnimatedBuilder(
                             animation: _glowAnimation,
                             builder: (context, child) {
@@ -144,7 +140,6 @@ class _BadgeEarnedModalState extends State<BadgeEarnedModal>
                       },
                     ),
 
-                    // Badge background
                     Container(
                       width: 100,
                       height: 100,
@@ -170,7 +165,6 @@ class _BadgeEarnedModalState extends State<BadgeEarnedModal>
                 ),
                 const SizedBox(height: 24),
 
-                // Badge earned title
                 const Text(
                   'Značka osvojena!',
                   style: TextStyle(
@@ -183,7 +177,6 @@ class _BadgeEarnedModalState extends State<BadgeEarnedModal>
                 ),
                 const SizedBox(height: 12),
 
-                // Badge name
                 Text(
                   widget.badge.name,
                   style: const TextStyle(
@@ -195,7 +188,6 @@ class _BadgeEarnedModalState extends State<BadgeEarnedModal>
                 ),
                 const SizedBox(height: 8),
 
-                // Badge description
                 Text(
                   widget.badge.description,
                   style: TextStyle(
@@ -230,7 +222,6 @@ class _BadgeEarnedModalState extends State<BadgeEarnedModal>
                 ),
                 const SizedBox(height: 28),
 
-                // See All Badges Button
                 Container(
                   width: double.infinity,
                   height: 48,
@@ -247,7 +238,6 @@ class _BadgeEarnedModalState extends State<BadgeEarnedModal>
                     child: InkWell(
                       borderRadius: BorderRadius.circular(12),
                       onTap: () {
-                        // Grab the navigator first: onDismiss closes this dialog.
                         final navigator = Navigator.of(context);
                         widget.onDismiss();
                         navigator.pushNamed(Routes.badges);
@@ -267,7 +257,6 @@ class _BadgeEarnedModalState extends State<BadgeEarnedModal>
                 ),
                 const SizedBox(height: 12),
 
-                // Continue Button
                 Container(
                   width: double.infinity,
                   height: 48,

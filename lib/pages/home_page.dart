@@ -31,9 +31,6 @@ class _HomePageState extends State<HomePage> {
       final model = context.read<RadioPlayerModel>();
       final auth = context.read<AuthService>();
 
-      // Load user data from Firestore when logged in (points, hours, achievements, etc.)
-      // Only once per user: reloading would overwrite progress that was
-      // counted in memory but not yet saved.
       if (auth.isAuthenticated &&
           auth.user != null &&
           model.loadedUserId != auth.user!.uid) {
@@ -47,13 +44,10 @@ class _HomePageState extends State<HomePage> {
             auth.user!.uid,
           );
           if (mounted) {
-            // New users (data == null) start clean; progress made before the
-            // data loaded is kept either way.
             model.loadUserProgress(auth.user!.uid, data);
             unawaited(model.syncNow());
           }
         } catch (e) {
-          // The app keeps working offline; loading is retried next time.
           logError('Loading saved progress', e);
         }
       }
@@ -61,16 +55,12 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       model.trackPageVisit(Routes.home);
 
-      // Popup when an achievement is unlocked (saving happens in the model;
-      // the popup never waits for the network).
       model.onAchievementEarned = (earned) {
         if (mounted) _showAchievementPopup(earned.achievement);
       };
 
-      // Unlock anything the loaded progress already qualifies for
       model.checkAchievements();
 
-      // Auto-play only once per app launch, not on every return to home.
       if (model.takeAutoPlay() && !model.playing) {
         Future.delayed(const Duration(milliseconds: 500), () {
           if (!model.playing) model.play();
@@ -102,8 +92,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// Shows the popups of unlocked achievements that were not shown yet,
-  /// one after another.
   void _showNextPendingAchievement() {
     if (!mounted) return;
     final next = context.read<RadioPlayerModel>().nextPendingAchievement;
@@ -149,11 +137,11 @@ class _HomePageState extends State<HomePage> {
           children: [
             const SizedBox(
               height: 270,
-            ), // Space for header + volume bar + padding
+            ),
             CurrentlyPlayingCard(model: model),
             const SizedBox(height: 24),
             const BadgesCard(),
-            const SizedBox(height: 140), // Space for bottom nav
+            const SizedBox(height: 140),
           ],
         ),
       ),

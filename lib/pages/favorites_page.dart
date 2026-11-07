@@ -164,7 +164,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
                 padding: const EdgeInsets.all(18),
                 child: Row(
                   children: [
-                    // Music Note Icon
                     Container(
                       width: 52,
                       height: 52,
@@ -187,7 +186,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
                     ),
                     const SizedBox(width: 16),
 
-                    // Song Info
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,7 +216,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
                       ),
                     ),
 
-                    // Remove from favorites button
                     Container(
                       width: 40,
                       height: 40,
@@ -290,7 +287,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Handle bar
             Container(
               width: 36,
               height: 4,
@@ -303,7 +299,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
             ),
             const SizedBox(height: 24),
 
-            // Large Music Icon
             Container(
               width: 80,
               height: 80,
@@ -326,7 +321,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
             ),
             const SizedBox(height: 24),
 
-            // Song Title
             Text(
               title,
               style: TextStyle(
@@ -338,7 +332,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
             ),
             const SizedBox(height: 8),
 
-            // Artist
             Text(
               artist,
               style: TextStyle(
@@ -350,7 +343,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
             ),
             const SizedBox(height: 32),
 
-            // Action Buttons
             Row(
               children: [
                 Expanded(
@@ -368,7 +360,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                         onTap: () {
                           final authService = context.read<AuthService>();
                           if (!authService.isAuthenticated) {
-                            Navigator.pop(context); // Close dialog first
+                            Navigator.pop(context);
                             LoginRequiredDialog.show(
                               context,
                               'brisanje omiljenih pjesama',

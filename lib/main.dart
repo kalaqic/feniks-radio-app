@@ -58,7 +58,6 @@ class FeniksApp extends StatelessWidget {
   }
 }
 
-/// Page for a named route; unknown routes open the home page.
 Widget _pageFor(String? routeName) {
   switch (routeName) {
     case Routes.loading:
@@ -77,7 +76,7 @@ Widget _pageFor(String? routeName) {
       return const ProfilePage();
     case Routes.settings:
       return const SettingsPage();
-    default: // Routes.home and anything unknown
+    default:
       return const HomePage();
   }
 }

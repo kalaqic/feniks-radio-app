@@ -2,11 +2,6 @@ import 'achievement.dart';
 import 'achievements.dart';
 import 'progress_rules.dart';
 
-/// Tracks listening time, streaks, favorites and unlocked achievements.
-///
-/// Pure logic: no audio, network or Flutter widgets. Time comes from [clock]
-/// and listening is reported through [tick], so everything can be tested
-/// without waiting for real time to pass.
 class ListeningProgress {
   ListeningProgress({DateTime Function()? clock})
     : _clock = clock ?? DateTime.now {
@@ -15,20 +10,14 @@ class ListeningProgress {
 
   final DateTime Function() _clock;
 
-  /// Longest time a single tick may count (protects against a timer that was
-  /// suspended while the app was in the background).
   static const int _maxStepMs = 60000;
 
-  /// Called right after an achievement is unlocked.
   void Function(EarnedAchievement earned)? onAchievementEarned;
 
-  /// Called whenever something visible changed.
   void Function()? onChanged;
 
-  /// Called when the progress should be saved.
   void Function()? onSaveRequested;
 
-  // --- Current session (not saved) -----------------------------------------
   DateTime? _lastTick;
   int _msCarry = 0;
   int _secondsTowardsMinute = 0;
@@ -38,11 +27,8 @@ class ListeningProgress {
   DateTime? _lastSaveRequest;
   final Map<Achievement, int> _slotMinutesToday = {};
 
-  /// True while loading saved data: re-checking old progress must not show
-  /// popups for achievements that were earned long ago.
   bool _silent = false;
 
-  // --- Saved progress --------------------------------------------------------
   final List<EarnedAchievement> _earned = [];
   final List<Achievement> _pending = [];
 
@@ -59,10 +45,9 @@ class ListeningProgress {
   int _listeningDays = 0;
 
   int _weekendDays = 0;
-  String? _workweekKey; // Monday of the week, yyyy-mm-dd
-  final Set<int> _workdaysThisWeek = {}; // 1 (Mon) .. 5 (Fri)
+  String? _workweekKey;
+  final Set<int> _workdaysThisWeek = {};
 
-  /// Time-of-day achievement id -> distinct days counted / last day counted.
   final Map<String, int> _slotDays = {};
   final Map<String, String> _slotLastDay = {};
 
@@ -71,11 +56,6 @@ class ListeningProgress {
   final List<String> _visitedPages = [];
   bool _hasPlayedBefore = false;
 
-  // ===========================================================================
-  // Read access
-  // ===========================================================================
-
-  int get todaySeconds => _todaySeconds;
   int get todayMinutes => _todaySeconds ~/ 60;
   int get totalMinutes => _totalSeconds ~/ 60;
   int get sessionCount => _sessionCount;
@@ -83,17 +63,14 @@ class ListeningProgress {
   Duration get currentSession => Duration(seconds: _sessionSeconds);
   bool get isSessionActive => _sessionActive;
 
-  /// Current streak; 0 when the last listening day was before yesterday.
   int get streak {
     final last = _lastListeningDay;
     if (last == null) return 0;
     return _daysBetween(last, _clock()) <= 1 ? _streak : 0;
   }
 
-  /// Points from listening: [ProgressRules.pointsPerMinute] per full minute.
   int get listeningPoints => totalMinutes * ProgressRules.pointsPerMinute;
 
-  /// Points from unlocked achievements.
   int get achievementPoints =>
       _earned.fold(0, (sum, e) => sum + e.achievement.points);
 
@@ -108,12 +85,6 @@ class ListeningProgress {
 
   bool isFavorite(String song) => _favorites.contains(song);
 
-  // ===========================================================================
-  // Listening
-  // ===========================================================================
-
-  /// Called about once per second. [listening] is true while audio is really
-  /// playing; [playerPlaying] is false once the user or the system stopped it.
   void tick({required bool listening, required bool playerPlaying}) {
     final now = _clock();
     final last = _lastTick ?? now;
@@ -126,14 +97,12 @@ class ListeningProgress {
     }
 
     if (!_sessionActive) {
-      // Count from the first tick on, so time before playback never leaks in.
       _startSession();
       _msCarry = 0;
       _changed();
       return;
     }
 
-    // Cap the step so that a suspended timer can never award phantom time.
     var stepMs = now.difference(last).inMilliseconds;
     if (stepMs < 0) stepMs = 0;
     if (stepMs > _maxStepMs) stepMs = _maxStepMs;
@@ -153,7 +122,6 @@ class ListeningProgress {
     _changed();
   }
 
-  /// Ends the current session (pause/stop).
   void endSession() {
     if (!_sessionActive) return;
     _sessionActive = false;
@@ -172,7 +140,6 @@ class ListeningProgress {
     }
   }
 
-  /// Runs once for every full minute of real listening.
   void _onListeningMinute(DateTime now) {
     if (!_todayCounted &&
         todayMinutes >= ProgressRules.minMinutesForListeningDay) {
@@ -204,7 +171,7 @@ class ListeningProgress {
   void _countTimeSlotMinute(DateTime now) {
     final slot = Achievements.timeSlotFor(now.hour);
     final today = _dayKey(now);
-    if (_slotLastDay[slot.id] == today) return; // already counted today
+    if (_slotLastDay[slot.id] == today) return;
 
     final minutes = (_slotMinutesToday[slot] ?? 0) + 1;
     _slotMinutesToday[slot] = minutes;
@@ -230,7 +197,6 @@ class ListeningProgress {
       _weekendDays++;
       _checkWeekend();
     } else {
-      // Monday of this week, built from date parts (safe across DST changes).
       final monday = _dayKey(
         DateTime(today.year, today.month, today.day - (now.weekday - 1)),
       );
@@ -262,14 +228,9 @@ class ListeningProgress {
     if (minutes > _longestSessionMinutes) _longestSessionMinutes = minutes;
   }
 
-  // ===========================================================================
-  // Songs, favorites and pages
-  // ===========================================================================
-
-  /// Counts a song for the discovery achievements (only while listening).
   void songHeard(String song) {
     if (!_sessionActive) return;
-    if (hasAchievement(Achievements.songHunter)) return; // nothing left
+    if (hasAchievement(Achievements.songHunter)) return;
     if (_songsHeard.add(song.toLowerCase())) _checkDiscovery();
   }
 
@@ -287,7 +248,6 @@ class ListeningProgress {
     _changed();
   }
 
-  /// Counts a page visit for the "Istraživač Aplikacije" achievement.
   void pageVisited(String route) {
     if (!ProgressRules.explorablePages.contains(route)) return;
     if (_visitedPages.contains(route)) return;
@@ -296,11 +256,6 @@ class ListeningProgress {
     _requestSave();
   }
 
-  // ===========================================================================
-  // Achievements
-  // ===========================================================================
-
-  /// Unlocks everything the current progress already qualifies for.
   void checkAll() {
     if (_hasPlayedBefore) _unlock(Achievements.firstListen);
     _checkExplorer();
@@ -318,7 +273,6 @@ class ListeningProgress {
     _checkDiscovery();
   }
 
-  /// Marks an unlocked achievement as shown to the user.
   void markShown(Achievement achievement) {
     _pending.removeWhere((a) => a.id == achievement.id);
     _changed();
@@ -336,7 +290,6 @@ class ListeningProgress {
     _changed();
   }
 
-  /// Unlocks every achievement in [group] whose requirement is reached.
   void _unlockReached(List<Achievement> group, int progress) {
     for (final achievement in group) {
       if (progress >= achievement.requirement) _unlock(achievement);
@@ -377,12 +330,6 @@ class ListeningProgress {
   void _checkDiscovery() =>
       _unlockReached(Achievements.discovery, _songsHeard.length);
 
-  // ===========================================================================
-  // Saving, loading, merging
-  // ===========================================================================
-
-  /// Data stored in Firestore under `users/{uid}.achievements`.
-  /// The keys are kept from older app versions so saved progress still loads.
   Map<String, dynamic> toJson() => {
     'earnedBadges': [
       for (final e in _earned)
@@ -411,7 +358,6 @@ class ListeningProgress {
     'todayCountedAsListeningDay': _todayCounted,
   };
 
-  /// Replaces the progress with saved data (also reads older formats).
   void loadJson(Map<String, dynamic> data) {
     _earned.clear();
     for (final item in data['earnedBadges'] as List<dynamic>? ?? const []) {
@@ -433,7 +379,7 @@ class ListeningProgress {
     _sessionCount = _readInt(data, 'sessionCount');
     _longestSessionMinutes = _readInt(data, 'longestSessionDuration');
     _listeningDays =
-        _readIntOrNull(data, 'totalListeningDays') ?? _streak; // older saves
+        _readIntOrNull(data, 'totalListeningDays') ?? _streak;
 
     _favorites
       ..clear()
@@ -465,7 +411,7 @@ class ListeningProgress {
 
     _weekendDays =
         _readIntOrNull(data, 'weekendDaysCount') ??
-        _readStrings(data, 'weekendDaysVisited').length; // older saves
+        _readStrings(data, 'weekendDaysVisited').length;
     _workweekKey = data['workweekKey'] as String?;
     _workdaysThisWeek
       ..clear()
@@ -493,8 +439,6 @@ class ListeningProgress {
     _changed();
   }
 
-  /// Adds progress made before the saved data was loaded (e.g. before
-  /// logging in), so that listening time is never lost.
   void mergeUnsaved(ListeningProgress unsaved) {
     _totalSeconds += unsaved._totalSeconds;
     if (unsaved._todayKey == _todayKey) _todaySeconds += unsaved._todaySeconds;
@@ -511,12 +455,9 @@ class ListeningProgress {
     _changed();
   }
 
-  /// Copy of the saved part of the progress (used before loading over it).
   ListeningProgress snapshot() =>
       ListeningProgress(clock: _clock)..loadJson(toJson());
 
-  /// Clears all progress (logout / account deletion). A running session keeps
-  /// running but is not counted as a new session again.
   void reset() {
     _earned.clear();
     _pending.clear();
@@ -542,10 +483,6 @@ class ListeningProgress {
     _hasPlayedBefore = false;
     _changed();
   }
-
-  // ===========================================================================
-  // Helpers
-  // ===========================================================================
 
   void _silently(void Function() action) {
     _silent = true;
@@ -583,8 +520,6 @@ class ListeningProgress {
 
   static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  /// Whole calendar days from [from] to [to]. Counted in UTC so that days with
-  /// a daylight saving change (23 or 25 hours long) still count as one day.
   static int _daysBetween(DateTime from, DateTime to) => DateTime.utc(
     to.year,
     to.month,
@@ -596,7 +531,6 @@ class ListeningProgress {
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 
-  /// Older versions saved days without zero padding (2026-1-5).
   static String _normalizeDayKey(String key) {
     final parts = key.split('-').map(int.tryParse).toList();
     if (parts.length != 3 || parts.contains(null)) return key;

@@ -540,13 +540,11 @@ class _ProfilePageState extends State<ProfilePage> {
     if (password == null || password.isEmpty || !context.mounted) return;
 
     final model = context.read<RadioPlayerModel>();
-    // Stop saving progress so nothing re-creates the deleted data. If the
-    // deletion fails, the progress is simply loaded again from the server.
+
     model.resetProgress();
     await model.waitForPendingSync();
     final error = await auth.deleteAccount(password);
     if (error != null) {
-      // Not deleted: bring the saved progress back.
       final uid = auth.user?.uid;
       if (uid != null) {
         try {
@@ -620,8 +618,6 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
             );
             if (confirmed == true && context.mounted) {
-              // Save the latest progress, then clear it so the next user
-              // on this phone starts clean.
               final model = context.read<RadioPlayerModel>();
               await model.syncNow().timeout(
                 const Duration(seconds: 5),

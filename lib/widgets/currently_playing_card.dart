@@ -31,7 +31,6 @@ class CurrentlyPlayingCard extends StatelessWidget {
 
     return Consumer<RadioPlayerModel>(
       builder: (context, model, child) {
-        // Format song and artist names
         final formattedInfo = TextFormatting.formatSongInfo(
           model.currentSong,
           model.currentArtist,
@@ -59,7 +58,6 @@ class CurrentlyPlayingCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header row
               Row(
                 children: [
                   Container(
@@ -125,7 +123,6 @@ class CurrentlyPlayingCard extends StatelessWidget {
               ),
               const SizedBox(height: 18),
 
-              // Listening timer (when playing)
               if (model.playing) ...[
                 Row(
                   children: [
@@ -159,7 +156,6 @@ class CurrentlyPlayingCard extends StatelessWidget {
                 const SizedBox(height: 14),
               ],
 
-              // Song info and favorite button
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -234,7 +230,7 @@ class CurrentlyPlayingCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Compact favorite button
+
                   Container(
                     decoration: BoxDecoration(
                       gradient: model.isFavorite(model.currentSongDisplay)
@@ -263,7 +259,7 @@ class CurrentlyPlayingCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                         onTap: () {
                           final authService = context.read<AuthService>();
-                          // Allow removal without login, but require login for adding
+
                           if (!model.isFavorite(model.currentSongDisplay) &&
                               !authService.isAuthenticated) {
                             LoginRequiredDialog.show(
@@ -329,7 +325,6 @@ class CurrentlyPlayingCard extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // View favorites button
               Container(
                 width: double.infinity,
                 decoration: BoxDecoration(

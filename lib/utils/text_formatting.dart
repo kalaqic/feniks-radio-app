@@ -2,17 +2,13 @@ class TextFormatting {
   static Map<String, String> formatSongInfo(String title, String artist) {
     final Map<String, String> result = {};
 
-    // Format song title: first letter uppercase, rest lowercase
     result['title'] = formatTitle(title);
 
-    // Format artist: every word starts with uppercase
     result['artist'] = formatArtist(artist);
 
-    // Extract featuring information
     final featInfo = _extractFeaturing(title, artist);
     result['feat'] = featInfo['feat'] ?? '';
 
-    // Update title and artist without feat info
     if (featInfo['cleanTitle'] != null) {
       result['title'] = featInfo['cleanTitle']!;
     }
@@ -23,14 +19,12 @@ class TextFormatting {
     return result;
   }
 
-  /// Song title in sentence case: "bosnom behar" -> "Bosnom behar".
   static String formatTitle(String title) {
     if (title.isEmpty) return title;
 
     return title.toLowerCase().replaceRange(0, 1, title[0].toUpperCase());
   }
 
-  /// Artist with every word capitalized: "SAFET ISOVIĆ" -> "Safet Isović".
   static String formatArtist(String artist) {
     if (artist.isEmpty) return artist;
 
@@ -50,7 +44,6 @@ class TextFormatting {
       'feat': '',
     };
 
-    // Patterns to match featuring information
     final featPatterns = [
       RegExp(r'\s+feat\.?\s+(.+?)(?:\s*[\)\]]|$)', caseSensitive: false),
       RegExp(r'\s+featuring\s+(.+?)(?:\s*[\)\]]|$)', caseSensitive: false),
@@ -63,7 +56,6 @@ class TextFormatting {
     String cleanTitle = title;
     String featArtist = '';
 
-    // Check title for featuring info
     for (final pattern in featPatterns) {
       final match = pattern.firstMatch(cleanTitle);
       if (match != null) {
@@ -73,7 +65,6 @@ class TextFormatting {
       }
     }
 
-    // Check artist for featuring info
     if (featArtist.isEmpty) {
       String cleanArtistName = artist;
       for (final pattern in featPatterns) {

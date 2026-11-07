@@ -4,11 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/log.dart';
 
-/// User settings, stored on the device.
 class AppSettings {
   AppSettings({this.persist = true});
 
-  /// False in tests: nothing is read from or written to the device.
   final bool persist;
 
   static const _keyNotifications = 'settings.notificationsEnabled';
@@ -38,7 +36,6 @@ class AppSettings {
     }
   }
 
-  /// Writes all settings in the background.
   void save() {
     if (!persist) return;
     unawaited(_write());

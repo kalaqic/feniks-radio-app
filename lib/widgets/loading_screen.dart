@@ -25,8 +25,6 @@ class _LoadingScreenState extends State<LoadingScreen>
   Future<void> _runStartupFlow() async {
     final model = context.read<RadioPlayerModel>();
 
-    // Try to get the now-playing song, but never wait forever: with no
-    // internet (or while a jingle plays) the app must still open.
     final deadline = DateTime.now().add(const Duration(seconds: 8));
     while (mounted &&
         model.isFallbackSong &&
@@ -40,7 +38,6 @@ class _LoadingScreenState extends State<LoadingScreen>
       await Future.delayed(const Duration(seconds: 1));
     }
 
-    // Short pause so the splash animation is visible.
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
     final isLoggedIn = context.read<AuthService>().isAuthenticated;
@@ -90,7 +87,6 @@ class _LoadingScreenState extends State<LoadingScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Background - whole PNG visible on page
           Positioned.fill(
             child: Opacity(
               opacity: 0.1,

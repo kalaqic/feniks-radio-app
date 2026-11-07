@@ -19,7 +19,6 @@ class CommonFooter extends StatelessWidget {
     return Container(
       height: 105,
       decoration: BoxDecoration(
-        // Solid, so the background circles never show through the footer.
         color: isDark ? const Color(0xFF0B0B0F) : Colors.white,
         border: Border(
           top: BorderSide(

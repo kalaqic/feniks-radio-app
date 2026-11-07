@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// The red gradient card used for highlights (points, badge progress).
 class GradientCard extends StatelessWidget {
   const GradientCard({
     super.key,

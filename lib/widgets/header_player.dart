@@ -8,7 +8,6 @@ import '../theme/app_theme.dart';
 const _liveColor = Color(0xFF34C759);
 const _stopColor = Color(0xFFFF3B30);
 
-/// Red header on the home page: station logo, live status and play/stop.
 class HeaderPlayer extends StatelessWidget implements PreferredSizeWidget {
   const HeaderPlayer({super.key, required this.model});
 
@@ -39,7 +38,7 @@ class HeaderPlayer extends StatelessWidget implements PreferredSizeWidget {
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          // One listener for the player state drives the whole header.
+
           child: StreamBuilder<PlayerState>(
             stream: model.playerStateStream,
             builder: (context, _) {
@@ -63,7 +62,6 @@ class HeaderPlayer extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-/// Station logo with a soft halo while the radio is playing.
 class _StationLogo extends StatelessWidget {
   const _StationLogo({required this.playing});
 
@@ -109,7 +107,6 @@ class _StationLogo extends StatelessWidget {
   }
 }
 
-/// Station name and the "Uživo" / "Zaustavljeno" status.
 class _StationInfo extends StatelessWidget {
   const _StationInfo({required this.playing});
 
@@ -161,7 +158,6 @@ class _StationInfo extends StatelessWidget {
   }
 }
 
-/// Round white play/stop button.
 class _PlayStopButton extends StatelessWidget {
   const _PlayStopButton({required this.playing, required this.onPressed});
 

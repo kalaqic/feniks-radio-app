@@ -11,20 +11,16 @@ class MetadataService {
   Stream<Map<String, String>>? get metadataStream =>
       _metadataController?.stream;
 
-  /// Initialize the metadata service and start fetching metadata
   void start() {
     _metadataController = StreamController<Map<String, String>>.broadcast();
 
-    // Fetch metadata immediately
     _fetchMetadata();
 
-    // Set up periodic fetching (every 30 seconds)
     _metadataTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       _fetchMetadata();
     });
   }
 
-  /// Stop the metadata service
   void stop() {
     _metadataTimer?.cancel();
     _metadataTimer = null;
@@ -32,7 +28,6 @@ class MetadataService {
     _metadataController = null;
   }
 
-  /// Fetch current song metadata from the radio stream
   Future<Map<String, String>> _fetchMetadata() async {
     try {
       final apiMetadata = await _getApiMetadata();
@@ -61,9 +56,6 @@ class MetadataService {
     }
   }
 
-  /// Attempt to get ICY metadata from the stream. Reads only until the first
-  /// metadata block and always closes the connection, so the audio stream is
-  /// never downloaded in the background.
   Future<Map<String, String>> _getIcyMetadata() async {
     final client = http.Client();
     try {
@@ -89,7 +81,6 @@ class MetadataService {
     }
   }
 
-  /// Extract the first ICY metadata block from the stream.
   Future<Map<String, String>> _extractIcyMetadata(
     http.StreamedResponse response,
     int metaInterval,
@@ -114,22 +105,19 @@ class MetadataService {
             .trim();
         return _parseIcyMetadata(metaString);
       }
-      // Safety limit: never read more than ~1 MB of audio.
+
       if (buffer.length > 1024 * 1024) break;
     }
     return {};
   }
 
-  /// Parse ICY metadata string
   Map<String, String> _parseIcyMetadata(String metaString) {
     final result = <String, String>{};
 
-    // ICY metadata format: StreamTitle='Artist - Title';StreamUrl='';
     final titleMatch = RegExp(r"StreamTitle='([^']*)'").firstMatch(metaString);
     if (titleMatch != null) {
       final streamTitle = titleMatch.group(1) ?? '';
 
-      // Try to split artist and title
       if (streamTitle.contains(' - ')) {
         final parts = streamTitle.split(' - ');
         if (parts.length >= 2) {
@@ -148,11 +136,8 @@ class MetadataService {
     return result;
   }
 
-  /// Get metadata from the API using the correct JSON endpoint
   Future<Map<String, String>> _getApiMetadata() async {
     try {
-      // Use the correct JSON status endpoint
-
       final response = await http
           .get(
             Uri.parse(AppConfig.nowPlayingUrl),
@@ -171,7 +156,6 @@ class MetadataService {
             return result;
           }
         } catch (_) {
-          // If not JSON, try to parse as text
           final result = _parseApiText(response.body);
           if (result.isNotEmpty) {
             return result;
@@ -184,17 +168,14 @@ class MetadataService {
     return {};
   }
 
-  /// Parse RadioBoss JSON status response
   Map<String, String> _parseRadioBossJson(dynamic data) {
     final result = <String, String>{};
 
     try {
       if (data is Map) {
-        // RadioBoss JSON typically contains these fields
         String? title;
         String? artist;
 
-        // Look for common RadioBoss JSON fields
         if (data.containsKey('title')) {
           title = data['title']?.toString();
         }
@@ -203,18 +184,14 @@ class MetadataService {
           artist = data['artist']?.toString();
         }
 
-        // Handle RadioBoss Icecast JSON structure
         if (data.containsKey('icestats')) {
           final icestats = data['icestats'];
           if (icestats is Map && icestats.containsKey('source')) {
             final source = icestats['source'];
 
-            // Source can be either a single object or an array
             if (source is List && source.isNotEmpty) {
-              // Take the first source that has metadata
               for (final sourceItem in source) {
                 if (sourceItem is Map) {
-                  // Check for yp_currently_playing (complete song info)
                   if (sourceItem.containsKey('yp_currently_playing')) {
                     final songInfo = sourceItem['yp_currently_playing']
                         ?.toString();
@@ -223,7 +200,6 @@ class MetadataService {
                     }
                   }
 
-                  // Check for title field
                   if (sourceItem.containsKey('title')) {
                     final songInfo = sourceItem['title']?.toString();
                     if (songInfo != null && songInfo.isNotEmpty) {
@@ -233,7 +209,6 @@ class MetadataService {
                 }
               }
             } else if (source is Map) {
-              // Handle single source object
               if (source.containsKey('yp_currently_playing')) {
                 final songInfo = source['yp_currently_playing']?.toString();
                 if (songInfo != null && songInfo.isNotEmpty) {
@@ -251,7 +226,6 @@ class MetadataService {
           }
         }
 
-        // Look for stream title that might contain "Artist - Title"
         if (data.containsKey('stream_title') ||
             data.containsKey('streamtitle')) {
           final streamTitle = (data['stream_title'] ?? data['streamtitle'])
@@ -261,7 +235,6 @@ class MetadataService {
           }
         }
 
-        // Look for yp_currently_playing (common in Icecast)
         if (data.containsKey('yp_currently_playing')) {
           final currentlyPlaying = data['yp_currently_playing']?.toString();
           if (currentlyPlaying != null && currentlyPlaying.isNotEmpty) {
@@ -269,7 +242,6 @@ class MetadataService {
           }
         }
 
-        // If we found separate title and artist
         if (title != null || artist != null) {
           result['title'] = title ?? '';
           result['artist'] = artist ?? '';
@@ -282,11 +254,9 @@ class MetadataService {
     return result;
   }
 
-  /// Parse text API response
   Map<String, String> _parseApiText(String text) {
     final result = <String, String>{};
 
-    // Look for common patterns in the response
     final patterns = [
       RegExp(r'<title>(.*?)</title>', caseSensitive: false),
       RegExp(r'<song>(.*?)</song>', caseSensitive: false),
@@ -314,12 +284,10 @@ class MetadataService {
     return result;
   }
 
-  /// Helper method to parse song strings in "Artist - Title" format
   Map<String, String> _parseSongString(String songString) {
     final result = <String, String>{};
 
     if (songString.isNotEmpty) {
-      // Check if this is the Feniks Radio phone number pattern
       if (_isPhoneNumberMetadata(songString)) {
         result['title'] = 'Feniks Radio';
         result['artist'] = 'Samo dobre vijesti!';
@@ -332,7 +300,6 @@ class MetadataService {
           final artist = parts[0].trim();
           final title = parts.sublist(1).join(' - ').trim();
 
-          // Check if artist or title contains phone number
           if (_isPhoneNumberMetadata(artist) || _isPhoneNumberMetadata(title)) {
             result['title'] = 'Feniks Radio';
             result['artist'] = 'Samo dobre vijesti!';
@@ -354,11 +321,9 @@ class MetadataService {
     return result;
   }
 
-  /// Check if the metadata contains phone number patterns
   bool _isPhoneNumberMetadata(String text) {
     if (text.isEmpty) return false;
 
-    // Common phone number patterns for Feniks Radio
     final phonePatterns = [
       RegExp(r'066\s*/?\s*17\s*17\s*13', caseSensitive: false),
       RegExp(r'066\s*-?\s*17\s*-?\s*17\s*-?\s*13', caseSensitive: false),
@@ -376,7 +341,6 @@ class MetadataService {
     return false;
   }
 
-  /// Get current metadata once (without starting the stream)
   Future<Map<String, String>> getCurrentMetadata() async {
     return await _fetchMetadata();
   }

@@ -6,15 +6,10 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId;
     }
 
-    // Users can read and write only their own document.
     match /users/{userId} {
       allow read, write: if isOwner(userId);
     }
 
-    // Username -> email lookup for login (username + password).
-    // Anyone can read (needed to log in). A username can only be claimed once,
-    // by the account it points to, and can't be taken over later. It is
-    // released only when that account is deleted.
     match /usernameLookup/{username} {
       allow read: if true;
       allow create: if request.auth != null
@@ -24,10 +19,6 @@ service cloud.firestore {
         && resource.data.uid == request.auth.uid;
     }
 
-    // All-time leaderboard. Anyone can read; each user writes only their own
-    // entry, and the points can't grow faster than the app can award them:
-    //  - listening: 2 points per minute since the last update (+ small margin)
-    //  - badges: at most the sum of all badge points (9500) and 35 badges
     match /leaderboard/{userId} {
       allow read: if true;
       allow create: if isOwner(userId)
