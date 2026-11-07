@@ -340,6 +340,22 @@ void main() {
   });
 
   group('Saving and loading', () {
+    test('daily listening history is kept for 90 days', () {
+      final s = Sim(DateTime(2026, 1, 5, 9));
+      s.listen(min * 12);
+      s.nextDay();
+      s.listen(min * 3);
+      var history = s.model.progressToJson()['dailyMinutes'] as Map;
+      expect(history['2026-01-05'], 12);
+      expect(history['2026-01-06'], 3);
+
+      s.goTo(DateTime(2026, 4, 10, 9));
+      s.listen(min * 1);
+      history = s.model.progressToJson()['dailyMinutes'] as Map;
+      expect(history.containsKey('2026-01-05'), isFalse);
+      expect(history['2026-04-10'], 1);
+    });
+
     test('save -> load keeps everything', () {
       final a = Sim();
       a.listen(min * 65);

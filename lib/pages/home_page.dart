@@ -39,6 +39,7 @@ class _HomePageState extends State<HomePage> {
             auth.user!.uid,
             displayName: auth.user!.displayName,
             email: auth.user!.email,
+            createdAt: auth.user!.metadata.creationTime,
           );
           final data = await FirestoreService.instance.loadUserAchievements(
             auth.user!.uid,

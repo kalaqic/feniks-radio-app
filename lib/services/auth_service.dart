@@ -43,6 +43,7 @@ class AuthService extends ChangeNotifier {
             userCredential.user!.uid,
             displayName: displayName,
             email: email,
+            createdAt: userCredential.user!.metadata.creationTime,
           );
         } catch (e) {
           logError('Saving user profile', e);
@@ -81,6 +82,7 @@ class AuthService extends ChangeNotifier {
             _user!.uid,
             displayName: _user!.displayName,
             email: _user!.email,
+            createdAt: _user!.metadata.creationTime,
           );
         } catch (e) {
           logError('Saving user profile', e);
@@ -135,6 +137,38 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  Future<String?> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final user = _auth.currentUser;
+    final email = user?.email;
+    if (user == null || email == null) return 'Niste prijavljeni.';
+    try {
+      await user.reauthenticateWithCredential(
+        EmailAuthProvider.credential(email: email, password: currentPassword),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (const {
+        'wrong-password',
+        'invalid-credential',
+        'INVALID_LOGIN_CREDENTIALS',
+      }.contains(e.code)) {
+        return 'Trenutna lozinka nije ispravna.';
+      }
+      return _getErrorMessage(e.code);
+    } catch (_) {
+      return 'Promjena lozinke nije uspjela. Pokušajte ponovo.';
+    }
+    try {
+      await user.updatePassword(newPassword);
+      return null;
+    } on FirebaseAuthException catch (e) {
+      return _getErrorMessage(e.code);
+    } catch (_) {
+      return 'Promjena lozinke nije uspjela. Pokušajte ponovo.';
+    }
+  }
 
   String _getErrorMessage(String code) {
     switch (code) {

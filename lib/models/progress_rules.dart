@@ -11,6 +11,8 @@ abstract final class ProgressRules {
 
   static const Duration saveInterval = Duration(minutes: 5);
 
+  static const int historyDays = 90;
+
   static const List<String> explorablePages = [
     Routes.home,
     Routes.leaderboard,

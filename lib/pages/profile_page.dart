@@ -143,6 +143,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 const SizedBox(height: 32),
                 _buildLogoutButton(context, auth, isDarkMode),
                 const SizedBox(height: 12),
+                _buildChangePasswordButton(context, isDarkMode),
+                const SizedBox(height: 4),
                 Center(
                   child: TextButton(
                     onPressed: () => _confirmDeleteAccount(context, auth),
@@ -498,6 +500,48 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  Widget _buildChangePasswordButton(BuildContext context, bool isDarkMode) {
+    final colors = AppColors.of(isDarkMode);
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: OutlinedButton.icon(
+        onPressed: () => _changePassword(context),
+        icon: Icon(Icons.lock_reset_rounded, color: colors.primaryText),
+        label: Text(
+          'Promijeni lozinku',
+          style: TextStyle(
+            color: colors.primaryText,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(
+            color: colors.secondaryText.withValues(alpha: 0.4),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _changePassword(BuildContext context) async {
+    final changed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _ChangePasswordDialog(),
+    );
+    if (changed != true || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Lozinka je promijenjena.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   Future<void> _confirmDeleteAccount(
     BuildContext context,
     AuthService auth,
@@ -654,6 +698,147 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ChangePasswordDialog extends StatefulWidget {
+  const _ChangePasswordDialog();
+
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _currentController = TextEditingController();
+  final _newController = TextEditingController();
+  final _confirmController = TextEditingController();
+  bool _saving = false;
+  bool _obscure = true;
+  String? _error;
+
+  @override
+  void dispose() {
+    _currentController.dispose();
+    _newController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final error = await context.read<AuthService>().changePassword(
+      currentPassword: _currentController.text,
+      newPassword: _newController.text,
+    );
+    if (!mounted) return;
+    if (error == null) {
+      Navigator.pop(context, true);
+      return;
+    }
+    setState(() {
+      _saving = false;
+      _error = error;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Promijeni lozinku'),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _currentController,
+                obscureText: _obscure,
+                autofocus: true,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Trenutna lozinka',
+                ),
+                validator: (v) => (v == null || v.isEmpty)
+                    ? 'Unesite trenutnu lozinku'
+                    : null,
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _newController,
+                obscureText: _obscure,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(labelText: 'Nova lozinka'),
+                validator: (v) {
+                  if (v == null || v.length < 6) {
+                    return 'Najmanje 6 karaktera';
+                  }
+                  if (v == _currentController.text) {
+                    return 'Nova lozinka mora biti drugačija';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _confirmController,
+                obscureText: _obscure,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _saving ? null : _submit(),
+                decoration: const InputDecoration(
+                  labelText: 'Ponovi novu lozinku',
+                ),
+                validator: (v) => v != _newController.text
+                    ? 'Lozinke se ne poklapaju'
+                    : null,
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                  icon: Icon(
+                    _obscure
+                        ? Icons.visibility_rounded
+                        : Icons.visibility_off_rounded,
+                    size: 18,
+                  ),
+                  label: Text(_obscure ? 'Prikaži lozinke' : 'Sakrij lozinke'),
+                ),
+              ),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context, false),
+          child: const Text('Otkaži'),
+        ),
+        TextButton(
+          onPressed: _saving ? null : _submit,
+          child: _saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Sačuvaj'),
+        ),
+      ],
     );
   }
 }

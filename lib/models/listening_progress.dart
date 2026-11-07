@@ -51,6 +51,8 @@ class ListeningProgress {
   final Map<String, int> _slotDays = {};
   final Map<String, String> _slotLastDay = {};
 
+  final Map<String, int> _dailyMinutes = {};
+
   final List<String> _favorites = [];
   final Set<String> _songsHeard = {};
   final List<String> _visitedPages = [];
@@ -141,6 +143,7 @@ class ListeningProgress {
   }
 
   void _onListeningMinute(DateTime now) {
+    _recordDailyMinute(now);
     if (!_todayCounted &&
         todayMinutes >= ProgressRules.minMinutesForListeningDay) {
       _todayCounted = true;
@@ -166,6 +169,17 @@ class ListeningProgress {
         now.difference(lastSave) >= ProgressRules.saveInterval) {
       _requestSave();
     }
+  }
+
+  void _recordDailyMinute(DateTime now) {
+    final today = _dayKey(now);
+    if (!_dailyMinutes.containsKey(today)) {
+      final oldest = _dayKey(
+        DateTime(now.year, now.month, now.day - ProgressRules.historyDays),
+      );
+      _dailyMinutes.removeWhere((day, _) => day.compareTo(oldest) < 0);
+    }
+    _dailyMinutes[today] = (_dailyMinutes[today] ?? 0) + 1;
   }
 
   void _countTimeSlotMinute(DateTime now) {
@@ -356,6 +370,7 @@ class ListeningProgress {
     'todayListeningSeconds': _todaySeconds,
     'dateForTodayListening': _todayKey,
     'todayCountedAsListeningDay': _todayCounted,
+    'dailyMinutes': Map<String, int>.of(_dailyMinutes),
   };
 
   void loadJson(Map<String, dynamic> data) {
@@ -408,6 +423,14 @@ class ListeningProgress {
     _slotLastDay
       ..clear()
       ..addAll(_readMap<String>(data, 'slotLastCountedDay'));
+    _dailyMinutes
+      ..clear()
+      ..addAll(
+        _readMap<num>(
+          data,
+          'dailyMinutes',
+        ).map((day, minutes) => MapEntry(day, minutes.toInt())),
+      );
 
     _weekendDays =
         _readIntOrNull(data, 'weekendDaysCount') ??
@@ -451,6 +474,9 @@ class ListeningProgress {
       if (!_visitedPages.contains(page)) _visitedPages.add(page);
     }
     _songsHeard.addAll(unsaved._songsHeard);
+    unsaved._dailyMinutes.forEach((day, minutes) {
+      _dailyMinutes[day] = (_dailyMinutes[day] ?? 0) + minutes;
+    });
     _silently(checkAll);
     _changed();
   }
@@ -477,6 +503,7 @@ class ListeningProgress {
     _workdaysThisWeek.clear();
     _slotDays.clear();
     _slotLastDay.clear();
+    _dailyMinutes.clear();
     _favorites.clear();
     _songsHeard.clear();
     _visitedPages.clear();

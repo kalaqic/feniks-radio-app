@@ -18,6 +18,9 @@ class FirestoreService {
   CollectionReference<Map<String, dynamic>> get _usernameLookup =>
       _firestore.collection('usernameLookup');
 
+  CollectionReference<Map<String, dynamic>> get _presence =>
+      _firestore.collection('presence');
+
   CollectionReference<Map<String, dynamic>> get _leaderboard =>
       _firestore.collection('leaderboard');
 
@@ -63,15 +66,30 @@ class FirestoreService {
     String uid, {
     String? displayName,
     String? email,
+    DateTime? createdAt,
   }) async {
     await _users.doc(uid).set({
       'displayName': (displayName == null || displayName.trim().isEmpty)
           ? 'Anonim'
           : displayName.trim(),
       if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+      if (createdAt != null) 'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': FieldValue.serverTimestamp(),
-      'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+  }
+
+  Future<void> updatePresence(
+    String uid, {
+    required bool listening,
+    required bool active,
+    required String platform,
+  }) async {
+    await _presence.doc(uid).set({
+      'listening': listening,
+      'active': active,
+      'platform': platform,
+      'lastSeen': FieldValue.serverTimestamp(),
+    });
   }
 
   Future<void> saveUserAchievements(
@@ -149,6 +167,7 @@ class FirestoreService {
         }
       }
     }
+    await _presence.doc(uid).delete();
     await _users.doc(uid).delete();
   }
 

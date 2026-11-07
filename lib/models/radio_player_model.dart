@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../config/app_config.dart';
 import '../services/app_settings.dart';
 import '../services/metadata_service.dart';
 import '../services/notification_service.dart';
+import '../services/presence_service.dart';
 import '../services/progress_sync.dart';
 import '../utils/log.dart';
 import '../utils/text_formatting.dart';
@@ -26,7 +28,8 @@ class RadioPlayerModel extends ChangeNotifier {
     bool enableSync = true,
     bool enablePersistence = true,
   }) : _progress = ListeningProgress(clock: clock),
-       _settings = AppSettings(persist: enablePersistence) {
+       _settings = AppSettings(persist: enablePersistence),
+       _presence = PresenceService(enabled: enableSync) {
     _sync = ProgressSync(_progress, enabled: enableSync);
     _progress
       ..onChanged = notifyListeners
@@ -36,6 +39,9 @@ class RadioPlayerModel extends ChangeNotifier {
 
   final ListeningProgress _progress;
   final AppSettings _settings;
+  final PresenceService _presence;
+  AppLifecycleListener? _lifecycle;
+  bool _appInForeground = true;
   late final ProgressSync _sync;
 
   AudioPlayer? _playerInstance;
@@ -69,6 +75,12 @@ class RadioPlayerModel extends ChangeNotifier {
     } catch (e) {
       logError('Initializing the audio player', e);
     }
+    _lifecycle = AppLifecycleListener(
+      onStateChange: (state) {
+        _appInForeground = state == AppLifecycleState.resumed;
+        _reportPresence();
+      },
+    );
     _metadata.start();
     _metadata.metadataStream?.listen(_updateCurrentSong);
     unawaited(updateSong());
@@ -98,6 +110,7 @@ class RadioPlayerModel extends ChangeNotifier {
   void _startTicker() {
     _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
       _tick(listening: _isListeningNow(), playerPlaying: _player.playing);
+      _reportPresence();
     });
   }
 
@@ -115,6 +128,14 @@ class RadioPlayerModel extends ChangeNotifier {
       debugPrint('[Feniks] listening=$listening state=$state');
     }
     return listening;
+  }
+
+  void _reportPresence() {
+    final listening = _progress.isSessionActive;
+    _presence.update(
+      listening: listening,
+      active: _appInForeground || listening,
+    );
   }
 
   void _tick({required bool listening, required bool playerPlaying}) {
@@ -135,6 +156,7 @@ class RadioPlayerModel extends ChangeNotifier {
   @override
   void dispose() {
     _ticker?.cancel();
+    _lifecycle?.dispose();
     _metadataInstance?.stop();
     _playerInstance?.dispose();
     super.dispose();
