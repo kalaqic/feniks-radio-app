@@ -26,15 +26,21 @@ class _LoadingScreenState extends State<LoadingScreen>
   Future<void> _runStartupFlow() async {
     final model = context.read<RadioPlayerModel>();
 
-    // Keep loading until we get actual now-playing metadata.
-    while (mounted && _isFallbackSong(model)) {
-      await model.updateSong();
+    // Try to get the now-playing song, but never wait forever: with no
+    // internet (or while a jingle plays) the app must still open.
+    final deadline = DateTime.now().add(const Duration(seconds: 8));
+    while (mounted &&
+        _isFallbackSong(model) &&
+        DateTime.now().isBefore(deadline)) {
+      try {
+        await model.updateSong().timeout(const Duration(seconds: 5));
+      } catch (_) {}
       if (!_isFallbackSong(model)) break;
       await Future.delayed(const Duration(seconds: 1));
     }
 
-    // Then keep splash 5 more seconds.
-    await Future.delayed(const Duration(seconds: 5));
+    // Short pause so the splash animation is visible.
+    await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
     final isLoggedIn = context.read<AuthService>().isAuthenticated;
     Navigator.pushReplacementNamed(

@@ -21,6 +21,7 @@ class _SettingsPageState extends State<SettingsPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final model = context.read<RadioPlayerModel>();
       final themeProvider = context.read<ThemeProvider>();
+      model.trackPageVisit('/settings');
       
       if (model.isDarkMode != themeProvider.isDarkMode) {
         themeProvider.toggleTheme(model.isDarkMode);
@@ -46,7 +47,6 @@ class _SettingsPageState extends State<SettingsPage> {
             size: 28,
           ),
           onPressed: () {
-            context.read<RadioPlayerModel>().trackPageVisit('/settings');
             Navigator.pushNamedAndRemoveUntil(context, '/profile', (route) => false);
           },
         ),
@@ -60,19 +60,6 @@ class _SettingsPageState extends State<SettingsPage> {
         elevation: model.isDarkMode ? 0 : null,
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: model.isDarkMode 
-            ? AppTheme.backgroundGradient
-            : LinearGradient(
-                colors: [
-                  Theme.of(context).scaffoldBackgroundColor,
-                  Theme.of(context).colorScheme.surface,
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                stops: [0.0, 1.0],
-              ),
-        ),
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
@@ -113,7 +100,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       'Dobij podsjetnik da se uključiš u program i slušaš uživo',
                       Icons.notifications_active_outlined,
                       model.notificationsEnabled,
-                      (value) => model.notificationsEnabled = value,
+                      (value) => _setNotificationsEnabled(model, value),
                     ),
                     if (model.notificationsEnabled) ...[
                       const SizedBox(height: 16),
@@ -137,32 +124,6 @@ class _SettingsPageState extends State<SettingsPage> {
                       model.autoPlay,
                       (value) => model.autoPlay = value,
                     ),
-                    const SizedBox(height: 16),
-                    _buildToggleSetting(
-                      'Visoki kvalitet',
-                      'Koristi veću brzinu prenosa za bolji zvuk',
-                      Icons.high_quality_outlined,
-                      model.highQuality,
-                      (value) => model.highQuality = value,
-                    ),
-                  ],
-                ),
-                
-                const SizedBox(height: 20),
-                
-                // Data Section
-                _buildSettingSection(
-                  title: 'Podaci',
-                  icon: Icons.cloud_download_outlined,
-                  iconColors: [Color(0xFFFF6B35), Color(0xFFFF8E53)],
-                  children: [
-                    _buildToggleSetting(
-                      'Preuzmi samo na WiFi',
-                      'Koristi mobilne podatke samo za streaming',
-                      Icons.wifi_outlined,
-                      model.downloadOnWifi,
-                      (value) => model.downloadOnWifi = value,
-                    ),
                   ],
                 ),
                 
@@ -177,6 +138,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     _buildInfoSetting('Verzija', '1.0.0', Icons.system_update_outlined, null),
                     const SizedBox(height: 12),
                     _buildInfoSetting('Podrška', 'feniks.radio94.7@gmail.com', Icons.email_outlined, () => _openEmailSupport()),
+                    const SizedBox(height: 12),
+                    _buildInfoSetting('Ostavi feedback', 'Predloži ideju', Icons.lightbulb_outline, () => _openFeedbackEmail()),
                     const SizedBox(height: 12),
                     _buildInfoSetting('Uslovi korišćenja', 'Prikaži', Icons.description_outlined, () => _showTermsOfService()),
                   ],
@@ -479,10 +442,7 @@ class _SettingsPageState extends State<SettingsPage> {
               child: InkWell(
                 borderRadius: BorderRadius.circular(10),
                 onTap: () async {
-                  await NotificationService.instance.scheduleDailyGoodNews(
-                    hour: model.notificationHour,
-                    minute: model.notificationMinute,
-                  );
+                  await _scheduleReminder(model);
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -542,6 +502,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onTap: () {
                       model.setNotificationTime(index, model.notificationMinute);
                       Navigator.pop(context);
+                      _scheduleReminder(model);
                     },
                   );
                 },
@@ -583,6 +544,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onTap: () {
                       model.setNotificationTime(model.notificationHour, minute);
                       Navigator.pop(context);
+                      _scheduleReminder(model);
                     },
                   );
                 },
@@ -594,13 +556,88 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
   
+  Future<void> _scheduleReminder(RadioPlayerModel model) async {
+    try {
+      await NotificationService.instance.scheduleDailyGoodNews(
+        hour: model.notificationHour,
+        minute: model.notificationMinute,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Podsjetnik nije moguće podesiti na ovom uređaju.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _setNotificationsEnabled(
+    RadioPlayerModel model,
+    bool value,
+  ) async {
+    if (!value) {
+      model.notificationsEnabled = false;
+      await NotificationService.instance.cancelDailyReminder();
+      return;
+    }
+    final granted = await NotificationService.instance.requestPermission();
+    if (!mounted) return;
+    if (!granted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Notifikacije su isključene u postavkama telefona. Uključite ih za Feniks Radio.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    model.notificationsEnabled = true;
+    await _scheduleReminder(model);
+  }
+
+  /// Opens the mail app with our address, a subject and a short template.
+  Future<void> _openFeedbackEmail() async {
+    const subject = 'Feedback / prijedlog - Feniks Radio aplikacija';
+    const body = 'Zdravo Feniks ekipa,\n\n'
+        'Šta mi se sviđa:\n\n\n'
+        'Šta bih promijenio/la ili dodao/la:\n\n\n'
+        '(Verzija aplikacije: 1.0.0)';
+    final uri = Uri(
+      scheme: 'mailto',
+      path: 'feniks.radio94.7@gmail.com',
+      // Encoded by hand: queryParameters would turn spaces into "+".
+      query: 'subject=${Uri.encodeComponent(subject)}'
+          '&body=${Uri.encodeComponent(body)}',
+    );
+    bool opened;
+    try {
+      opened = await launchUrl(uri);
+    } catch (_) {
+      opened = false;
+    }
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Nije pronađena aplikacija za email. Pišite nam na feniks.radio94.7@gmail.com',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   void _openEmailSupport() {
     final uri = Uri(
       scheme: 'mailto',
       path: 'feniks.radio94.7@gmail.com',
-      queryParameters: {
-        'subject': 'Podrška - Feniks Radio',
-      },
+      // Encoded by hand: queryParameters would turn spaces into "+".
+      query: 'subject=${Uri.encodeComponent('Podrška - Feniks Radio')}',
     );
     launchUrl(uri);
   }
@@ -614,13 +651,13 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Text(
             'Korišćenjem Feniks Radio aplikacije slažete se sa sljedećim uslovima:\n\n'
             '1. Aplikacija je besplatna za korišćenje\n'
-            '   Sve funkcije aplikacije, uključujući slušanje radija i slanje muzičkih želja, dostupne su bez naknade.\n\n'
+            '   Sve funkcije aplikacije dostupne su bez naknade. Aplikacija ne sadrži plaćanja niti kupovine.\n\n'
             '2. Sav sadržaj je vlasništvo Feniks Radija ili njegovih partnera\n'
             '   Audio stream, vizuelni elementi, logo i tekstualni sadržaj zaštićeni su autorskim i srodnim pravima.\n\n'
             '3. Zabranjena je neovlaštena redistribucija sadržaja\n'
             '   Nije dozvoljeno kopiranje, javno ponovno emitovanje, prodaja ili distribucija sadržaja bez pismene dozvole.\n\n'
-            '4. Pravila slanja poruka i muzičkih želja\n'
-            '   Korisnici mogu slati jednu poruku svakih 10 minuta. Feniks Radio zadržava pravo da ne emituje poruke koje sadrže neprimjeren ili uvredljiv sadržaj.\n\n'
+            '4. Feniks poeni i ljestvica\n'
+            '   Poeni se dobijaju slušanjem programa i osvajanjem znački. Ljestvica prikazuje korisnike sa najviše poena od početka korišćenja. Pokušaji vještačkog povećavanja poena mogu dovesti do uklanjanja sa ljestvice.\n\n'
             '5. Privatnost i obrada podataka\n'
             '   Feniks Radio može obrađivati osnovne podatke naloga i statistiku korišćenja (npr. postignuća, omiljene pjesme) radi rada aplikacije.\n\n'
             '6. Feniks Radio zadržava pravo izmjene uslova\n'
@@ -643,7 +680,6 @@ class _SettingsPageState extends State<SettingsPage> {
       width: double.infinity,
       child: OutlinedButton.icon(
         onPressed: () {
-          context.read<RadioPlayerModel>().trackPageVisit('/settings');
           Navigator.pushNamedAndRemoveUntil(context, '/profile', (route) => false);
         },
         icon: const Icon(Icons.person_outline_rounded, size: 20),

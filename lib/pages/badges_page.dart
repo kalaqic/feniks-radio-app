@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '/models/radio_player_model.dart';
+import '../models/radio_player_model.dart';
 import '../widgets/badge_info_modal.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
@@ -18,7 +18,9 @@ class _BadgesPageState extends State<BadgesPage> {
   @override
   void initState() {
     super.initState();
-    // Removed automatic popup - user can access via info icon
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<RadioPlayerModel>().trackPageVisit('/badges');
+    });
   }
 
   void _showBadgeExplanationModal() {
@@ -71,19 +73,6 @@ class _BadgesPageState extends State<BadgesPage> {
         ],
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: isDarkMode 
-            ? AppTheme.backgroundGradient
-            : const LinearGradient(
-                colors: [
-                  Color(0xFFF2F2F7),
-                  Color(0xFFFFFFFF),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                stops: [0.0, 1.0],
-              ),
-        ),
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),

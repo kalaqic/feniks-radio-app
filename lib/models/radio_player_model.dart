@@ -3,121 +3,180 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/metadata_service.dart';
 import '../services/firestore_service.dart';
+import '../services/notification_service.dart';
 
 const kStreamUrl = 'https://c30.radioboss.fm:8234/stream';
 
+/// Feniks poeni za slušanje: [kListeningPointsPerBlock] poena za svakih
+/// [kListeningBlockMinutes] minuta stvarnog slušanja.
+const int kListeningBlockMinutes = 1;
+const int kListeningPointsPerBlock = 2;
+
+/// Koliko minuta treba slušati u danu da bi se dan računao kao "dan slušanja"
+/// (za nizove, vikende, radne dane i dane slušanja).
+const int kMinMinutesForListeningDay = 5;
+
+/// Koliko minuta treba slušati u jednom dobu dana da bi se taj dan računao
+/// za značke tipa "Rana ptica", "Noćna ptica"...
+const int kMinMinutesForTimeSlot = 5;
+
+/// Sesija se računa za značke sesija tek kada traje bar ovoliko minuta.
+const int kMinMinutesForSession = 10;
+
+/// Pjesme koje se ne računaju (džinglovi / rezervni naslov kad nema metapodataka).
+const String kFallbackTitle = 'Feniks Radio';
+const String kFallbackArtist = 'Samo dobre vijesti!';
+
+/// Stranice koje se računaju za značku "Istraživač".
+const List<String> kExplorablePages = [
+  '/home',
+  '/leaderboard',
+  '/badges',
+  '/favorites',
+  '/profile',
+  '/settings',
+];
+
+/// Doba dana (početni sat uključen, krajnji isključen).
+const Map<String, List<int>> _timeSlots = {
+  'midnight_listener': [0, 5],
+  'early_bird': [5, 8],
+  'morning_person': [8, 12],
+  'afternoon_listener': [12, 18],
+  'evening_enthusiast': [18, 22],
+  'night_owl': [22, 24],
+};
+
 class RadioPlayerModel extends ChangeNotifier {
-  final _player = AudioPlayer();
-  final _metadataService = MetadataService();
+  /// [clock] and the `enable*` flags exist so the progress logic can be tested
+  /// without audio, network, Firebase or a real clock.
+  RadioPlayerModel({
+    DateTime Function()? clock,
+    this.enableSync = true,
+    this.enablePersistence = true,
+  }) : _clock = clock ?? DateTime.now {
+    _todayKey = _dayKey(_clock());
+  }
+
+  final DateTime Function() _clock;
+  final bool enableSync;
+  final bool enablePersistence;
+
+  AudioPlayer? _playerInstance;
+  AudioPlayer get _player => _playerInstance ??= AudioPlayer();
+  MetadataService? _metadataInstance;
+  MetadataService get _metadataService =>
+      _metadataInstance ??= MetadataService();
+
   bool _initialized = false;
   bool get isInitialized => _initialized;
 
-  DateTime? _sessionStartTime;
-  Timer? _sessionTimer;
-  DateTime? _lastStopTime;
-  int _todayListeningSeconds = 0;
-  int _longestSessionDuration = 0;
+  // ---------------------------------------------------------------------------
+  // Live listening tracking
+  // ---------------------------------------------------------------------------
+  Timer? _ticker;
+  DateTime? _lastTick;
+  bool _sessionActive = false;
+  bool _sessionCounted = false;
+  int _sessionListenedSeconds = 0;
+  int _secondsTowardsMinute = 0;
+  int _msCarry = 0;
+  DateTime? _lastSyncAt;
 
-  final Map<String, int> _weeklyListeningData = {
-    'Mon': 0,
-    'Tue': 0,
-    'Wed': 0,
-    'Thu': 0,
-    'Fri': 0,
-    'Sat': 0,
-    'Sun': 0,
-  };
+  late String _todayKey;
+  int _todayListeningSeconds = 0;
+  bool _todayCountedAsListeningDay = false;
+
+  /// Minutes listened today per time slot (in memory only).
+  final Map<String, int> _slotMinutesToday = {};
 
   bool _hasShownCelebrationToday = false;
-  int _consecutiveDays = 0;
-  bool _hasShownAchievementModal = false;
 
-  // Badge system
+  // ---------------------------------------------------------------------------
+  // Persisted progress
+  // ---------------------------------------------------------------------------
   final List<Map<String, dynamic>> _earnedBadges = [];
-  final List<String> _pendingBadges = []; // Badges earned but not shown yet
+  final List<String> _pendingBadges = [];
 
-  // Achievement tracking
-  DateTime? _lastListeningDate;
-  int _earlyBirdSessions = 0;
-  int _nightOwlSessions = 0;
-  int _midnightSessions = 0;
-  int _pagesVisited = 0;
-  int _sharesCount = 0;
-  int _fastStartCount = 0;
-  bool _hasPlayedBefore = false;
-  bool _hasPlayedSuccessfully = false;
-  final List<String> _visitedPages = [];
-
-  // New tracking variables
-  int _totalListeningMinutes = 0;
+  int _totalListeningSeconds = 0;
   int _sessionCount = 0;
-  int _morningListens = 0;
-  int _afternoonListens = 0;
-  int _eveningListens = 0;
-  DateTime? _appInstallDate;
+  int _longestSessionMinutes = 0;
+
+  int _consecutiveDays = 0;
+  DateTime? _lastListeningDate;
+  int _totalListeningDays = 0;
+
+  int _weekendDaysCount = 0;
+  String? _workweekKey; // Monday of the week, yyyy-mm-dd
+  final Set<int> _workdaysThisWeek = {}; // 1..5
+
+  /// slot id -> number of distinct days the user listened in that slot
+  final Map<String, int> _slotDayCounts = {};
+
+  /// slot id -> last day (yyyy-mm-dd) that was counted for that slot
+  final Map<String, String> _slotLastCountedDay = {};
+
   final Set<String> _uniqueSongs = {};
-  final Set<String> _musicGenres = {};
-  int _referralCount = 0;
-  bool _isCommunityMember = false;
+  final List<String> _visitedPages = [];
+  bool _hasPlayedBefore = false;
+
+  /// Firebase uid whose progress is currently loaded (null = not loaded yet).
+  String? loadedUserId;
+
   bool _syncInProgress = false;
+  bool _syncAgain = false;
+  Completer<void>? _syncDone;
 
-  // Track unique days for weekend_warrior and workday_warrior
-  final Set<String> _weekendDaysVisited = {};
-  final Set<String> _weekdayDaysVisited = {};
-
-  // Track continuous listening for technical achievements
-  DateTime? _continuousSessionStart;
-  DateTime? _qualitySessionStart;
-
-  // Track competitive achievements
-  int _top10Weeks = 0;
-
-  // Feniks Points System
-  int _messagesSent = 0;
-  int _listeningPoints = 0;
-  int _badgePoints = 0;
+  // ---------------------------------------------------------------------------
+  // Badges
+  // ---------------------------------------------------------------------------
 
   /// Section order for badges page.
   static const List<String> badgeSectionOrder = [
     'Prvi koraci',
     'Dnevno slušanje',
+    'Bez pauze',
     'Ukupno slušanje',
-    'Broj sesija',
+    'Sesije',
     'Nizovi',
-    'Vrijeme u danu',
+    'Dani slušanja',
+    'Doba dana',
     'Vikend i radni dan',
     'Omiljene pjesme',
     'Otkrivanje',
-    'Tehnički',
-    'Milestoni',
   ];
 
   static const Map<String, String> _badgeToSection = {
     'first_listen': 'Prvi koraci',
-    'first_playing': 'Prvi koraci',
     'app_explorer': 'Prvi koraci',
-    'speed_start': 'Prvi koraci',
     'first_hour': 'Dnevno slušanje',
     'marathon': 'Dnevno slušanje',
     'five_hours': 'Dnevno slušanje',
+    'quality_listener': 'Bez pauze',
+    'stable_connection': 'Bez pauze',
+    'ultra_marathon': 'Bez pauze',
     'ten_hours': 'Ukupno slušanje',
     'fifty_hours': 'Ukupno slušanje',
     'hundred_hours': 'Ukupno slušanje',
-    'ten_sessions': 'Broj sesija',
-    'fifty_sessions': 'Broj sesija',
-    'hundred_sessions': 'Broj sesija',
+    'ten_sessions': 'Sesije',
+    'fifty_sessions': 'Sesije',
+    'hundred_sessions': 'Sesije',
     'daily_listener': 'Nizovi',
     'weekly_champion': 'Nizovi',
     'loyal_fan': 'Nizovi',
     'legend': 'Nizovi',
-    'early_bird': 'Vrijeme u danu',
-    'night_owl': 'Vrijeme u danu',
-    'midnight_listener': 'Vrijeme u danu',
-    'morning_person': 'Vrijeme u danu',
-    'afternoon_listener': 'Vrijeme u danu',
-    'evening_enthusiast': 'Vrijeme u danu',
+    'first_week': 'Dani slušanja',
+    'first_month': 'Dani slušanja',
+    'loyal_user': 'Dani slušanja',
+    'midnight_listener': 'Doba dana',
+    'early_bird': 'Doba dana',
+    'morning_person': 'Doba dana',
+    'afternoon_listener': 'Doba dana',
+    'evening_enthusiast': 'Doba dana',
+    'night_owl': 'Doba dana',
     'weekend_warrior': 'Vikend i radni dan',
     'workday_warrior': 'Vikend i radni dan',
     'music_lover': 'Omiljene pjesme',
@@ -125,449 +184,188 @@ class RadioPlayerModel extends ChangeNotifier {
     'music_expert': 'Omiljene pjesme',
     'music_master': 'Omiljene pjesme',
     'song_discoverer': 'Otkrivanje',
-    'genre_explorer': 'Otkrivanje',
-    'stable_connection': 'Tehnički',
-    'quality_listener': 'Tehnički',
-    'ultra_marathon': 'Tehnički',
-    'first_week': 'Milestoni',
-    'first_month': 'Milestoni',
-    'loyal_user': 'Milestoni',
+    'song_hunter': 'Otkrivanje',
   };
 
-  // All available badges
+  static Map<String, dynamic> _badge(
+    String id,
+    String name,
+    String description,
+    String icon,
+    int color,
+    int requirement,
+    int points,
+    String type,
+  ) => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'icon': icon,
+    'color': color,
+    'requirement': requirement,
+    'points': points,
+    'type': type,
+  };
+
+  // All available badges. Every badge has a unique id, name and icon, and a
+  // single place in the code where it is awarded.
   static final Map<String, Map<String, dynamic>> _allBadges = {
-    // Time-based achievements
-    'first_hour': {
-      'id': 'first_hour',
-      'name': 'Prvi Sat',
-      'description': 'Slušaj više od sata vremena u jednom danu',
-      'icon': '⏰',
-      'color': 0xFF34C759,
-      'requirement': 60, // minutes
-      'points': 50,
-      'type': 'daily_listening',
-    },
-    'five_hours': {
-      'id': 'five_hours',
-      'name': 'Pet Sati',
-      'description': 'Slušaj 5 sati u jednom danu',
-      'icon': '🕐',
-      'color': 0xFF5856D6,
-      'requirement': 300, // minutes
-      'points': 200,
-      'type': 'daily_listening',
-    },
-    'marathon': {
-      'id': 'marathon',
-      'name': 'Maraton Slušanje',
-      'description': 'Slušaj 3 sata u jednom danu',
-      'icon': '🏃',
-      'color': 0xFFFF9500,
-      'requirement': 180, // minutes daily
-      'points': 200,
-      'type': 'daily_listening',
-    },
-    'ultra_marathon': {
-      'id': 'ultra_marathon',
-      'name': 'Ultra Maraton',
-      'description': 'Slušaj bez prekida 6 sati',
-      'icon': '🚀',
-      'color': 0xFFFF3B30,
-      'requirement': 360, // minutes continuously
-      'points': 500,
-      'type': 'continuous_listening',
-    },
+    // Prvi koraci
+    'first_listen': _badge('first_listen', 'Prvi Put',
+        'Pokreni Feniks Radio prvi put', '🎧', 0xFF34C759, 1, 25, 'special'),
+    'app_explorer': _badge(
+        'app_explorer',
+        'Istraživač Aplikacije',
+        'Posjeti sve stranice: Početna, Ljestvica, Značke, Omiljene, Profil i Postavke',
+        '🧭',
+        0xFF007AFF,
+        kExplorablePages.length,
+        50,
+        'special'),
 
-    // Streak achievements
-    'daily_listener': {
-      'id': 'daily_listener',
-      'name': 'Dnevni Slušalac',
-      'description': 'Slušaj Feniks Radio 7 dana zaredom',
-      'icon': '📅',
-      'color': 0xFFEB6556,
-      'requirement': 7, // consecutive days
-      'points': 150,
-      'type': 'streak',
-    },
-    'weekly_champion': {
-      'id': 'weekly_champion',
-      'name': 'Sedmični Šampion',
-      'description': 'Slušaj Feniks Radio 14 dana zaredom',
-      'icon': '🎖️',
-      'color': 0xFF32D74B,
-      'requirement': 14, // consecutive days
-      'points': 250,
-      'type': 'streak',
-    },
-    'loyal_fan': {
-      'id': 'loyal_fan',
-      'name': 'Vjeran Fan',
-      'description': 'Slušaj Feniks Radio 30 dana zaredom',
-      'icon': '👑',
-      'color': 0xFF8B5CF6,
-      'requirement': 30, // consecutive days
-      'points': 500,
-      'type': 'streak',
-    },
-    'legend': {
-      'id': 'legend',
-      'name': 'Legenda',
-      'description': 'Slušaj Feniks Radio 100 dana zaredom',
-      'icon': '⚡',
-      'color': 0xFFFFD700,
-      'requirement': 100, // consecutive days
-      'points': 1000,
-      'type': 'streak',
-    },
+    // Dnevno slušanje (zbir u jednom danu)
+    'first_hour': _badge('first_hour', 'Prvi Sat',
+        'Slušaj 1 sat u jednom danu', '⏰', 0xFF34C759, 60, 50, 'daily_listening'),
+    'marathon': _badge('marathon', 'Maraton', 'Slušaj 3 sata u jednom danu',
+        '🏃', 0xFFFF9500, 180, 150, 'daily_listening'),
+    'five_hours': _badge('five_hours', 'Pet Sati', 'Slušaj 5 sati u jednom danu',
+        '🔥', 0xFF5856D6, 300, 250, 'daily_listening'),
 
-    // Time-of-day achievements
-    'early_bird': {
-      'id': 'early_bird',
-      'name': 'Rana Ptica',
-      'description': 'Slušaj radio između 5AM i 8AM',
-      'icon': '🐦',
-      'color': 0xFF32D74B,
-      'requirement': 5, // times
-      'points': 75,
-      'type': 'time_based',
-    },
-    'night_owl': {
-      'id': 'night_owl',
-      'name': 'Noćna Ptica',
-      'description': 'Slušaj radio između 10PM i 2AM',
-      'icon': '🦉',
-      'color': 0xFF5856D6,
-      'requirement': 5, // times
-      'points': 75,
-      'type': 'time_based',
-    },
-    'midnight_listener': {
-      'id': 'midnight_listener',
-      'name': 'Ponoćni Slušalac',
-      'description': 'Slušaj radio između 12AM i 2AM',
-      'icon': '🌙',
-      'color': 0xFF8B5CF6,
-      'requirement': 3, // times
-      'points': 100,
-      'type': 'time_based',
-    },
-    'weekend_warrior': {
-      'id': 'weekend_warrior',
-      'name': 'Vikend Ratnik',
-      'description': 'Slušaj radio svaki vikend u mjesecu',
-      'icon': '🎉',
-      'color': 0xFFFF9500,
-      'requirement': 8, // weekend days
-      'points': 200,
-      'type': 'time_based',
-    },
+    // Bez pauze (jedna sesija, bez zaustavljanja)
+    'quality_listener': _badge('quality_listener', 'Pola Sata u Komadu',
+        'Slušaj 30 minuta bez pauze', '🔊', 0xFF007AFF, 30, 50, 'continuous_listening'),
+    'stable_connection': _badge('stable_connection', 'Dva Sata Bez Pauze',
+        'Slušaj 2 sata bez pauze', '📡', 0xFF34C759, 120, 150, 'continuous_listening'),
+    'ultra_marathon': _badge('ultra_marathon', 'Ultra Maraton',
+        'Slušaj 6 sati bez pauze', '🚀', 0xFFFF3B30, 360, 400, 'continuous_listening'),
 
-    // Music-related achievements
-    'music_lover': {
-      'id': 'music_lover',
-      'name': 'Ljubitelj Muzike',
-      'description': 'Dodaj 10 pjesama u omiljene',
-      'icon': '💝',
-      'color': 0xFFFF3B30,
-      'requirement': 10, // favorite songs
-      'points': 150,
-      'type': 'favorites',
-    },
-    'music_collector': {
-      'id': 'music_collector',
-      'name': 'Kolekcionar Muzike',
-      'description': 'Dodaj 25 pjesama u omiljene',
-      'icon': '📀',
-      'color': 0xFF007AFF,
-      'requirement': 25, // favorite songs
-      'points': 300,
-      'type': 'favorites',
-    },
-    'music_expert': {
-      'id': 'music_expert',
-      'name': 'Stručnjak za Muziku',
-      'description': 'Dodaj 50 pjesama u omiljene',
-      'icon': '🎵',
-      'color': 0xFF5856D6,
-      'requirement': 50, // favorite songs
-      'points': 500,
-      'type': 'favorites',
-    },
-    'music_master': {
-      'id': 'music_master',
-      'name': 'Majstor Muzike',
-      'description': 'Dodaj 100 pjesama u omiljene',
-      'icon': '🎼',
-      'color': 0xFFFFD700,
-      'requirement': 100, // favorite songs
-      'points': 750,
-      'type': 'favorites',
-    },
+    // Ukupno slušanje
+    'ten_hours': _badge('ten_hours', 'Deset Sati', 'Slušaj ukupno 10 sati',
+        '🕙', 0xFFFF9500, 600, 150, 'total_listening'),
+    'fifty_hours': _badge('fifty_hours', 'Pedeset Sati', 'Slušaj ukupno 50 sati',
+        '⌛', 0xFF5856D6, 3000, 500, 'total_listening'),
+    'hundred_hours': _badge('hundred_hours', 'Sto Sati', 'Slušaj ukupno 100 sati',
+        '💯', 0xFFFFD700, 6000, 1000, 'total_listening'),
 
-    // Special achievements
-    'first_listen': {
-      'id': 'first_listen',
-      'name': 'Prvi Put',
-      'description': 'Pokreni Feniks Radio prvi put',
-      'icon': '🎧',
-      'color': 0xFF34C759,
-      'requirement': 1, // times
-      'points': 25,
-      'type': 'special',
-    },
-    'first_playing': {
-      'id': 'first_playing',
-      'name': 'Prva Reprodukcija',
-      'description': 'Uspješno pokreni reprodukciju radija',
-      'icon': '▶️',
-      'color': 0xFF007AFF,
-      'requirement': 1, // successful plays
-      'points': 50,
-      'type': 'special',
-    },
-    'app_explorer': {
-      'id': 'app_explorer',
-      'name': 'Istraživač Aplikacije',
-      'description': 'Posjeti sve stranice u aplikaciji',
-      'icon': '🧭',
-      'color': 0xFF007AFF,
-      'requirement': 5, // different pages
-      'points': 100,
-      'type': 'special',
-    },
-    'speed_start': {
-      'id': 'speed_start',
-      'name': 'Brzinski Start',
-      'description': 'Pokreni radio u manje od 5 sekundi 10 puta',
-      'icon': '💨',
-      'color': 0xFFFF3B30,
-      'requirement': 10,
-      'points': 200,
-      'type': 'special',
-    },
+    // Sesije
+    'ten_sessions': _badge('ten_sessions', 'Deset Sesija',
+        'Završi 10 sesija slušanja od bar $kMinMinutesForSession minuta', '🔟',
+        0xFF34C759, 10, 100, 'session_count'),
+    'fifty_sessions': _badge('fifty_sessions', 'Pedeset Sesija',
+        'Završi 50 sesija slušanja od bar $kMinMinutesForSession minuta', '📻',
+        0xFF007AFF, 50, 300, 'session_count'),
+    'hundred_sessions': _badge('hundred_sessions', 'Sto Sesija',
+        'Završi 100 sesija slušanja od bar $kMinMinutesForSession minuta', '🎯',
+        0xFFFF3B30, 100, 600, 'session_count'),
 
-    // Time milestone achievements
-    'ten_hours': {
-      'id': 'ten_hours',
-      'name': 'Deset Sati',
-      'description': 'Slušaj ukupno 10 sati',
-      'icon': '🕙',
-      'color': 0xFFFF9500,
-      'requirement': 600, // minutes total
-      'points': 300,
-      'type': 'total_listening',
-    },
-    'fifty_hours': {
-      'id': 'fifty_hours',
-      'name': 'Pedeset Sati',
-      'description': 'Slušaj ukupno 50 sati',
-      'icon': '🕐',
-      'color': 0xFF5856D6,
-      'requirement': 3000, // minutes total
-      'points': 750,
-      'type': 'total_listening',
-    },
-    'hundred_hours': {
-      'id': 'hundred_hours',
-      'name': 'Sto Sati',
-      'description': 'Slušaj ukupno 100 sati',
-      'icon': '💯',
-      'color': 0xFFFFD700,
-      'requirement': 6000, // minutes total
-      'points': 1500,
-      'type': 'total_listening',
-    },
+    // Nizovi (uzastopni dani)
+    'daily_listener': _badge('daily_listener', 'Sedmica Zaredom',
+        'Slušaj Feniks Radio 7 dana zaredom', '📆', 0xFFEB6556, 7, 150, 'streak'),
+    'weekly_champion': _badge('weekly_champion', 'Dvije Sedmice Zaredom',
+        'Slušaj Feniks Radio 14 dana zaredom', '🎖️', 0xFF32D74B, 14, 250, 'streak'),
+    'loyal_fan': _badge('loyal_fan', 'Vjeran Fan',
+        'Slušaj Feniks Radio 30 dana zaredom', '👑', 0xFF8B5CF6, 30, 500, 'streak'),
+    'legend': _badge('legend', 'Legenda',
+        'Slušaj Feniks Radio 100 dana zaredom', '⚡', 0xFFFFD700, 100, 1000, 'streak'),
 
-    // Session count achievements
-    'ten_sessions': {
-      'id': 'ten_sessions',
-      'name': 'Deset Sesija',
-      'description': 'Završi 10 slušajnih sesija',
-      'icon': '🔟',
-      'color': 0xFF34C759,
-      'requirement': 10, // sessions
-      'points': 100,
-      'type': 'session_count',
-    },
-    'fifty_sessions': {
-      'id': 'fifty_sessions',
-      'name': 'Pedeset Sesija',
-      'description': 'Završi 50 slušajnih sesija',
-      'icon': '📻',
-      'color': 0xFF007AFF,
-      'requirement': 50, // sessions
-      'points': 300,
-      'type': 'session_count',
-    },
-    'hundred_sessions': {
-      'id': 'hundred_sessions',
-      'name': 'Sto Sesija',
-      'description': 'Završi 100 slušajnih sesija',
-      'icon': '🎯',
-      'color': 0xFFFF3B30,
-      'requirement': 100, // sessions
-      'points': 600,
-      'type': 'session_count',
-    },
+    // Dani slušanja (ukupno, ne moraju biti zaredom)
+    'first_week': _badge('first_week', 'Sedam Dana Slušanja',
+        'Slušaj radio u 7 različitih dana', '📅', 0xFF32D74B, 7, 75, 'listening_days'),
+    'first_month': _badge('first_month', 'Mjesec Dana Slušanja',
+        'Slušaj radio u 30 različitih dana', '🗓️', 0xFF5856D6, 30, 250, 'listening_days'),
+    'loyal_user': _badge('loyal_user', 'Vjeran Korisnik',
+        'Slušaj radio u 180 različitih dana', '💎', 0xFFFFD700, 180, 800, 'listening_days'),
 
-    // Habit achievements
-    'morning_person': {
-      'id': 'morning_person',
-      'name': 'Jutarnja Osoba',
-      'description': 'Slušaj radio 10 puta ujutru (6AM-10AM)',
-      'icon': '🌅',
-      'color': 0xFFFFD700,
-      'requirement': 10, // times
-      'points': 200,
-      'type': 'time_based',
-    },
-    'afternoon_listener': {
-      'id': 'afternoon_listener',
-      'name': 'Popodnevni Slušalac',
-      'description': 'Slušaj radio 10 puta poslije podne (12PM-6PM)',
-      'icon': '☀️',
-      'color': 0xFFFF9500,
-      'requirement': 10, // times
-      'points': 150,
-      'type': 'time_based',
-    },
-    'evening_enthusiast': {
-      'id': 'evening_enthusiast',
-      'name': 'Večernji Entuzijast',
-      'description': 'Slušaj radio 10 puta navečer (6PM-10PM)',
-      'icon': '🌆',
-      'color': 0xFF8B5CF6,
-      'requirement': 10, // times
-      'points': 150,
-      'type': 'time_based',
-    },
+    // Doba dana (broj različitih dana sa bar 5 minuta slušanja u tom periodu)
+    'midnight_listener': _badge('midnight_listener', 'Ponoćni Slušalac',
+        'Slušaj radio između 00 i 05h u 3 različita dana', '🌙', 0xFF8B5CF6, 3, 100, 'time_slot'),
+    'early_bird': _badge('early_bird', 'Rana Ptica',
+        'Slušaj radio između 05 i 08h u 5 različitih dana', '🐦', 0xFF32D74B, 5, 75, 'time_slot'),
+    'morning_person': _badge('morning_person', 'Jutarnja Osoba',
+        'Slušaj radio između 08 i 12h u 10 različitih dana', '🌅', 0xFFFFD700, 10, 150, 'time_slot'),
+    'afternoon_listener': _badge('afternoon_listener', 'Popodnevni Slušalac',
+        'Slušaj radio između 12 i 18h u 10 različitih dana', '☀️', 0xFFFF9500, 10, 150, 'time_slot'),
+    'evening_enthusiast': _badge('evening_enthusiast', 'Večernji Entuzijast',
+        'Slušaj radio između 18 i 22h u 10 različitih dana', '🌆', 0xFF8B5CF6, 10, 150, 'time_slot'),
+    'night_owl': _badge('night_owl', 'Noćna Ptica',
+        'Slušaj radio između 22 i 24h u 5 različitih dana', '🦉', 0xFF5856D6, 5, 75, 'time_slot'),
 
-    // Discovery achievements
-    'song_discoverer': {
-      'id': 'song_discoverer',
-      'name': 'Otkrivač Pjesama',
-      'description': 'Otkrij 5 različitih pjesama',
-      'icon': '🔍',
-      'color': 0xFF32D74B,
-      'requirement': 5, // unique songs
-      'points': 100,
-      'type': 'discovery',
-    },
-    'genre_explorer': {
-      'id': 'genre_explorer',
-      'name': 'Istraživač Žanrova',
-      'description': 'Slušaj pjesme iz 10 različitih žanrova',
-      'icon': '🎼',
-      'color': 0xFF5856D6,
-      'requirement': 10, // genres
-      'points': 300,
-      'type': 'discovery',
-    },
+    // Vikend i radni dan
+    'weekend_warrior': _badge('weekend_warrior', 'Vikend Ratnik',
+        'Slušaj radio u 8 različitih vikend dana (subota ili nedjelja)', '🎉',
+        0xFFFF9500, 8, 200, 'weekend'),
+    'workday_warrior': _badge('workday_warrior', 'Radna Sedmica',
+        'Slušaj radio svaki radni dan (pon–pet) u istoj sedmici', '💼',
+        0xFF007AFF, 5, 250, 'workweek'),
 
-    // Dedication achievements
-    'workday_warrior': {
-      'id': 'workday_warrior',
-      'name': 'Radni Dan Ratnik',
-      'description': 'Slušaj radio svaki radni dan u sedmici',
-      'icon': '💼',
-      'color': 0xFF007AFF,
-      'requirement': 5, // weekdays
-      'points': 250,
-      'type': 'time_based',
-    },
+    // Omiljene pjesme
+    'music_lover': _badge('music_lover', 'Ljubitelj Muzike',
+        'Imaj 10 pjesama u omiljenim', '💝', 0xFFFF3B30, 10, 100, 'favorites'),
+    'music_collector': _badge('music_collector', 'Kolekcionar Muzike',
+        'Imaj 25 pjesama u omiljenim', '📀', 0xFF007AFF, 25, 200, 'favorites'),
+    'music_expert': _badge('music_expert', 'Stručnjak za Muziku',
+        'Imaj 50 pjesama u omiljenim', '🎵', 0xFF5856D6, 50, 350, 'favorites'),
+    'music_master': _badge('music_master', 'Majstor Muzike',
+        'Imaj 100 pjesama u omiljenim', '🎼', 0xFFFFD700, 100, 500, 'favorites'),
 
-    // Technical achievements
-    'stable_connection': {
-      'id': 'stable_connection',
-      'name': 'Stabilna Konekcija',
-      'description': 'Slušaj 2 sata bez prekida konekcije',
-      'icon': '📡',
-      'color': 0xFF34C759,
-      'requirement': 120, // minutes without disconnection
-      'points': 200,
-      'type': 'technical',
-    },
-    'quality_listener': {
-      'id': 'quality_listener',
-      'name': 'Kvalitetni Slušalac',
-      'description': 'Održi konstantan kvalitet zvuka 30 minuta',
-      'icon': '🔊',
-      'color': 0xFF007AFF,
-      'requirement': 30, // minutes good quality
-      'points': 150,
-      'type': 'technical',
-    },
-
-    // Milestone achievements
-    'first_week': {
-      'id': 'first_week',
-      'name': 'Prva Sedmica',
-      'description': 'Koristi aplikaciju sedam dana',
-      'icon': '📅',
-      'color': 0xFF32D74B,
-      'requirement': 7, // days since install
-      'points': 100,
-      'type': 'milestone',
-    },
-    'first_month': {
-      'id': 'first_month',
-      'name': 'Prvi Mjesec',
-      'description': 'Koristi aplikaciju mjesec dana',
-      'icon': '🗓️',
-      'color': 0xFF5856D6,
-      'requirement': 30, // days since install
-      'points': 300,
-      'type': 'milestone',
-    },
-    'loyal_user': {
-      'id': 'loyal_user',
-      'name': 'Vjeran Korisnik',
-      'description': 'Koristi aplikaciju šest mjeseci',
-      'icon': '💎',
-      'color': 0xFFFFD700,
-      'requirement': 180, // days since install
-      'points': 800,
-      'type': 'milestone',
-    },
+    // Otkrivanje (različite pjesme koje su svirale dok si slušao)
+    'song_discoverer': _badge('song_discoverer', 'Otkrivač Pjesama',
+        'Čuj 50 različitih pjesama na Feniks Radiju', '🔍', 0xFF32D74B, 50, 100, 'discovery'),
+    'song_hunter': _badge('song_hunter', 'Lovac na Pjesme',
+        'Čuj 250 različitih pjesama na Feniks Radiju', '🎶', 0xFF5856D6, 250, 300, 'discovery'),
   };
 
-  String _currentSong = 'Feniks Radio';
-  String _currentArtist = 'Samo dobre vijesti!';
+  static int _req(String id) => _allBadges[id]!['requirement'] as int;
+
+  // ---------------------------------------------------------------------------
+  // Now playing / favorites / settings
+  // ---------------------------------------------------------------------------
+  String _currentSong = kFallbackTitle;
+  String _currentArtist = kFallbackArtist;
   bool _isFetchingCurrentSong = false;
   final List<String> _favoriteSongs = [];
 
-  /// Today's listening time in seconds. Includes current session while playing so the counter updates live.
-  int get todayListeningSeconds {
-    final base = _todayListeningSeconds;
-    if (playing && _sessionStartTime != null) {
-      return base + DateTime.now().difference(_sessionStartTime!).inSeconds;
-    }
-    return base;
+  bool _isDarkMode = false;
+  bool _notificationsEnabled = false;
+  bool _autoPlay = false;
+  double _volume = 0.8;
+  int _notificationHour = 8;
+  int _notificationMinute = 0;
+
+  // ---------------------------------------------------------------------------
+  // Getters
+  // ---------------------------------------------------------------------------
+  int get todayListeningSeconds => _todayListeningSeconds;
+  int get todayListeningMinutes => _todayListeningSeconds ~/ 60;
+  bool get shouldShowCelebration => !_hasShownCelebrationToday;
+
+  /// Current streak. Shows 0 if the last listening day was before yesterday.
+  int get consecutiveDays {
+    if (_lastListeningDate == null) return 0;
+    final today = _dateOnly(_clock());
+    final diff = today.difference(_dateOnly(_lastListeningDate!)).inDays;
+    return diff <= 1 ? _consecutiveDays : 0;
   }
 
-  int get todayListeningMinutes => (todayListeningSeconds / 60).round();
-  Map<String, int> get weeklyListeningData => _weeklyListeningData;
-  bool get shouldShowCelebration => !_hasShownCelebrationToday;
-  int get consecutiveDays => _consecutiveDays;
-  bool get shouldShowAchievementModal => !_hasShownAchievementModal;
+  int get totalListeningDays => _totalListeningDays;
+  int get sessionCount => _sessionCount;
+  int get longestSessionMinutes => _longestSessionMinutes;
 
-  // Badge system getters
   List<Map<String, dynamic>> get earnedBadges =>
       List.unmodifiable(_earnedBadges);
   List<String> get pendingBadges => List.unmodifiable(_pendingBadges);
   Map<String, Map<String, dynamic>> get allBadges => _allBadges;
   bool get hasPendingBadges => _pendingBadges.isNotEmpty;
 
-  /// Badges grouped by section for display, in badgeSectionOrder. Only sections that have badges are included.
+  /// Badges grouped by section for display, in [badgeSectionOrder].
   Map<String, List<Map<String, dynamic>>> get badgesGroupedBySection {
     final Map<String, List<Map<String, dynamic>>> result = {};
     for (final entry in _allBadges.entries) {
-      final id = entry.key;
-      final badge = Map<String, dynamic>.from(entry.value);
-      final section = _badgeToSection[id] ?? 'Ostalo';
-      result.putIfAbsent(section, () => []).add(badge);
+      final section = _badgeToSection[entry.key] ?? 'Ostalo';
+      result
+          .putIfAbsent(section, () => [])
+          .add(Map<String, dynamic>.from(entry.value));
     }
-    // Sort keys by badgeSectionOrder
     final ordered = <String, List<Map<String, dynamic>>>{};
     for (final section in badgeSectionOrder) {
       if (result.containsKey(section)) ordered[section] = result[section]!;
@@ -578,46 +376,39 @@ class RadioPlayerModel extends ChangeNotifier {
     return ordered;
   }
 
-  // Achievement popup callback
+  /// Called right after a badge is earned (used to show the popup).
   void Function(Map<String, dynamic>)? onAchievementEarned;
 
-  /// Called when progress changes (for Firestore sync).
-  void Function()? onProgressChanged;
+  /// Points from listening: [kListeningPointsPerBlock] for every full
+  /// [kListeningBlockMinutes] minutes ever listened.
+  int get listeningPoints =>
+      (_totalListeningSeconds ~/ (kListeningBlockMinutes * 60)) *
+      kListeningPointsPerBlock;
 
-  // Settings
-  bool _isDarkMode = false;
-  bool _notificationsEnabled = true;
-  bool _autoPlay = false;
-  bool _highQuality = true;
-  bool _downloadOnWifi = true;
-  double _volume = 0.8;
-  int _notificationHour = 8;
-  int _notificationMinute = 0;
+  /// Points from badges (always the sum of the earned badges' points).
+  int get badgePoints => _earnedBadges.fold<int>(
+    0,
+    (sum, b) => sum + ((b['points'] as int?) ?? 0),
+  );
 
-  // Feniks Points getters
-  int get messagesSent => _messagesSent;
-  int get listeningPoints => _listeningPoints;
-  int get badgePoints => _badgePoints;
-  int get totalFeniksPoints => _listeningPoints + _badgePoints;
+  int get totalFeniksPoints => listeningPoints + badgePoints;
 
-  /// Total minutes listened (all time). Includes current session while playing.
-  int get totalListeningMinutes =>
-      _totalListeningMinutes +
-      (playing && _sessionStartTime != null
-          ? currentSessionDuration.inMinutes
-          : 0);
+  /// Total minutes listened (all time), updated live while playing.
+  int get totalListeningMinutes => _totalListeningSeconds ~/ 60;
 
-  // Settings getters
+  /// Seconds until the next listening points are awarded.
+  int get secondsUntilNextListeningPoints {
+    final block = kListeningBlockMinutes * 60;
+    return block - (_totalListeningSeconds % block);
+  }
+
   bool get isDarkMode => _isDarkMode;
   bool get notificationsEnabled => _notificationsEnabled;
   bool get autoPlay => _autoPlay;
-  bool get highQuality => _highQuality;
-  bool get downloadOnWifi => _downloadOnWifi;
   double get volume => _volume;
   int get notificationHour => _notificationHour;
   int get notificationMinute => _notificationMinute;
 
-  // Settings setters
   set isDarkMode(bool value) {
     _isDarkMode = value;
     _saveSettings();
@@ -636,19 +427,6 @@ class RadioPlayerModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  set highQuality(bool value) {
-    _highQuality = value;
-    _updateAudioQuality();
-    _saveSettings();
-    notifyListeners();
-  }
-
-  set downloadOnWifi(bool value) {
-    _downloadOnWifi = value;
-    _saveSettings();
-    notifyListeners();
-  }
-
   set volume(double value) {
     _volume = value;
     _player.setVolume(value);
@@ -663,12 +441,61 @@ class RadioPlayerModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ---------------------------------------------------------------------------
+  // Settings persistence (stored on the device)
+  // ---------------------------------------------------------------------------
+  static const kPrefDarkMode = 'settings.darkMode';
+  static const _kPrefNotifications = 'settings.notificationsEnabled';
+  static const _kPrefAutoPlay = 'settings.autoPlay';
+  static const _kPrefVolume = 'settings.volume';
+  static const _kPrefNotifHour = 'settings.notificationHour';
+  static const _kPrefNotifMinute = 'settings.notificationMinute';
+
+  Future<void> _loadSettings() async {
+    if (!enablePersistence) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _isDarkMode = prefs.getBool(kPrefDarkMode) ?? _isDarkMode;
+      _notificationsEnabled =
+          prefs.getBool(_kPrefNotifications) ?? _notificationsEnabled;
+      _autoPlay = prefs.getBool(_kPrefAutoPlay) ?? _autoPlay;
+      _volume = prefs.getDouble(_kPrefVolume) ?? _volume;
+      _notificationHour = prefs.getInt(_kPrefNotifHour) ?? _notificationHour;
+      _notificationMinute =
+          prefs.getInt(_kPrefNotifMinute) ?? _notificationMinute;
+    } catch (e) {
+      if (kDebugMode) debugPrint('Error loading settings: $e');
+    }
+  }
+
+  void _saveSettings() {
+    if (!enablePersistence) return;
+    unawaited(() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(kPrefDarkMode, _isDarkMode);
+        await prefs.setBool(_kPrefNotifications, _notificationsEnabled);
+        await prefs.setBool(_kPrefAutoPlay, _autoPlay);
+        await prefs.setDouble(_kPrefVolume, _volume);
+        await prefs.setInt(_kPrefNotifHour, _notificationHour);
+        await prefs.setInt(_kPrefNotifMinute, _notificationMinute);
+      } catch (e) {
+        if (kDebugMode) debugPrint('Error saving settings: $e');
+      }
+    }());
+  }
+
   String get currentSong => _currentSong;
   String get currentArtist => _currentArtist;
   bool get isFetchingCurrentSong => _isFetchingCurrentSong;
   List<String> get favoriteSongs => List.unmodifiable(_favoriteSongs);
 
   bool isFavorite(String song) => _favoriteSongs.contains(song);
+
+  /// True when no real song info is available (station jingle / fallback).
+  bool get isFallbackSong =>
+      _currentSong.trim().isEmpty ||
+      _currentSong.trim().toLowerCase() == kFallbackTitle.toLowerCase();
 
   String get currentSongDisplay {
     if (_currentArtist.isNotEmpty) {
@@ -677,86 +504,83 @@ class RadioPlayerModel extends ChangeNotifier {
     return _currentSong;
   }
 
+  bool _autoPlayHandled = false;
+
+  /// True only the first time it is asked in an app launch, and only when
+  /// auto-play is on (so returning to the home page doesn't restart the radio).
+  bool takeAutoPlay() {
+    if (_autoPlayHandled) return false;
+    _autoPlayHandled = true;
+    return _autoPlay;
+  }
+
   void markCelebrationShown() {
     _hasShownCelebrationToday = true;
     notifyListeners();
   }
 
-  void markAchievementModalShown() {
-    _hasShownAchievementModal = true;
-    notifyListeners();
-  }
-
+  // ---------------------------------------------------------------------------
+  // Favorites
+  // ---------------------------------------------------------------------------
   void toggleFavorite() {
     final songKey = currentSongDisplay;
     if (_favoriteSongs.contains(songKey)) {
       _favoriteSongs.remove(songKey);
     } else {
+      // The station name / jingle is not a song.
+      if (isFallbackSong) return;
       _favoriteSongs.add(songKey);
-      // Check music-related achievements when adding favorites
-      _checkMusicAchievements();
+      _checkFavoriteAchievements();
     }
-    onProgressChanged?.call();
-    unawaited(_syncProgressToFirestore());
+    _requestSync();
     notifyListeners();
   }
 
   void removeFavorite(String song) {
     _favoriteSongs.remove(song);
-    onProgressChanged?.call();
-    unawaited(_syncProgressToFirestore());
+    _requestSync();
     notifyListeners();
   }
 
-  // Badge system methods
+  // ---------------------------------------------------------------------------
+  // Badge helpers
+  // ---------------------------------------------------------------------------
+
+  /// Re-checks every badge whose condition can be evaluated from stored state.
+  /// Safe to call at any time (e.g. after loading data from Firestore).
   void checkAndAwardBadges() {
-    // Check first hour badge
-    if (todayListeningMinutes >= 60 && !hasBadge('first_hour')) {
-      _awardBadge('first_hour');
+    if (_hasPlayedBefore) _awardBadge('first_listen');
+    _checkExplorer();
+    _checkDailyListening();
+    _checkTotalListening();
+    _checkSessionCount();
+    _checkStreak();
+    _checkListeningDays();
+    for (final slot in _timeSlots.keys) {
+      _checkSlot(slot);
     }
-
-    // Check music lover badge
-    if (_favoriteSongs.length >= 10 && !hasBadge('music_lover')) {
-      _awardBadge('music_lover');
-    }
-
-    // Check daily listener badge
-    if (_consecutiveDays >= 7 && !hasBadge('daily_listener')) {
-      _awardBadge('daily_listener');
-    }
-
-    // Check loyal fan badge
-    if (_consecutiveDays >= 30 && !hasBadge('loyal_fan')) {
-      _awardBadge('loyal_fan');
-    }
-
-    // Removed automatic top_monthly badge
+    _checkWeekend();
+    _checkWorkweek();
+    _checkFavoriteAchievements();
+    _checkDiscovery();
   }
 
-  bool hasBadge(String badgeId) {
-    return _earnedBadges.any((badge) => badge['id'] == badgeId);
-  }
+  bool hasBadge(String badgeId) =>
+      _earnedBadges.any((badge) => badge['id'] == badgeId);
 
   void _awardBadge(String badgeId) {
-    if (!hasBadge(badgeId) && _allBadges.containsKey(badgeId)) {
-      final badgeData = Map<String, dynamic>.from(_allBadges[badgeId]!);
-      badgeData['earnedDate'] = DateTime.now().toIso8601String();
+    if (hasBadge(badgeId) || !_allBadges.containsKey(badgeId)) return;
+    final badgeData = Map<String, dynamic>.from(_allBadges[badgeId]!);
+    badgeData['earnedDate'] = _clock().toIso8601String();
+    _earnedBadges.add(badgeData);
+    _pendingBadges.add(badgeId);
+    onAchievementEarned?.call(badgeData);
+    _requestSync();
+    notifyListeners();
+  }
 
-      _earnedBadges.add(badgeData);
-      _pendingBadges.add(badgeId);
-
-      // Add badge points to Feniks Points
-      final badgePoints = badgeData['points'] as int? ?? 0;
-      _addBadgePoints(badgePoints);
-
-      // Trigger immediate popup
-      if (onAchievementEarned != null) {
-        onAchievementEarned!(badgeData);
-      }
-      onProgressChanged?.call();
-      unawaited(_syncProgressToFirestore());
-      notifyListeners();
-    }
+  void _awardIf(bool condition, String badgeId) {
+    if (condition) _awardBadge(badgeId);
   }
 
   void markBadgeShown(String badgeId) {
@@ -764,10 +588,102 @@ class RadioPlayerModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  String getNextPendingBadge() {
-    return _pendingBadges.isNotEmpty ? _pendingBadges.first : '';
+  String getNextPendingBadge() =>
+      _pendingBadges.isNotEmpty ? _pendingBadges.first : '';
+
+  void _checkExplorer() {
+    final visited = _visitedPages.where(kExplorablePages.contains).toSet();
+    _awardIf(visited.length >= _req('app_explorer'), 'app_explorer');
   }
 
+  void _checkDailyListening() {
+    final minutes = todayListeningMinutes;
+    for (final id in const ['first_hour', 'marathon', 'five_hours']) {
+      _awardIf(minutes >= _req(id), id);
+    }
+  }
+
+  void _checkContinuous() {
+    final minutes = _sessionListenedSeconds ~/ 60;
+    for (final id in const [
+      'quality_listener',
+      'stable_connection',
+      'ultra_marathon',
+    ]) {
+      _awardIf(minutes >= _req(id), id);
+    }
+  }
+
+  void _checkTotalListening() {
+    final minutes = totalListeningMinutes;
+    for (final id in const ['ten_hours', 'fifty_hours', 'hundred_hours']) {
+      _awardIf(minutes >= _req(id), id);
+    }
+  }
+
+  void _checkSessionCount() {
+    for (final id in const [
+      'ten_sessions',
+      'fifty_sessions',
+      'hundred_sessions',
+    ]) {
+      _awardIf(_sessionCount >= _req(id), id);
+    }
+  }
+
+  void _checkStreak() {
+    for (final id in const [
+      'daily_listener',
+      'weekly_champion',
+      'loyal_fan',
+      'legend',
+    ]) {
+      _awardIf(_consecutiveDays >= _req(id), id);
+    }
+  }
+
+  void _checkListeningDays() {
+    for (final id in const ['first_week', 'first_month', 'loyal_user']) {
+      _awardIf(_totalListeningDays >= _req(id), id);
+    }
+  }
+
+  void _checkSlot(String slot) {
+    _awardIf((_slotDayCounts[slot] ?? 0) >= _req(slot), slot);
+  }
+
+  void _checkWeekend() {
+    _awardIf(_weekendDaysCount >= _req('weekend_warrior'), 'weekend_warrior');
+  }
+
+  void _checkWorkweek() {
+    _awardIf(
+      _workdaysThisWeek.length >= _req('workday_warrior'),
+      'workday_warrior',
+    );
+  }
+
+  void _checkFavoriteAchievements() {
+    final count = _favoriteSongs.length;
+    for (final id in const [
+      'music_lover',
+      'music_collector',
+      'music_expert',
+      'music_master',
+    ]) {
+      _awardIf(count >= _req(id), id);
+    }
+  }
+
+  void _checkDiscovery() {
+    final count = _uniqueSongs.length;
+    _awardIf(count >= _req('song_discoverer'), 'song_discoverer');
+    _awardIf(count >= _req('song_hunter'), 'song_hunter');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Metadata
+  // ---------------------------------------------------------------------------
   Future<void> updateSong() async {
     _isFetchingCurrentSong = true;
     notifyListeners();
@@ -780,641 +696,410 @@ class RadioPlayerModel extends ChangeNotifier {
     }
   }
 
-  /// True if string has at least one letter and all letters are uppercase.
   static bool _isAllCaps(String s) {
     if (s.isEmpty) return false;
     if (!RegExp(r'[A-Za-zÀ-ÿ]').hasMatch(s)) return false;
     return s == s.toUpperCase();
   }
 
-  /// Song title: only first letter uppercase, rest lowercase (when all caps).
   static String _formatSongTitle(String s) {
-    if (s.isEmpty) return s;
-    if (!_isAllCaps(s)) return s;
+    if (s.isEmpty || !_isAllCaps(s)) return s;
     return s[0].toUpperCase() + s.substring(1).toLowerCase();
   }
 
-  /// Artist: every word first letter uppercase (when all caps).
   static String _formatArtistName(String s) {
-    if (s.isEmpty) return s;
-    if (!_isAllCaps(s)) return s;
+    if (s.isEmpty || !_isAllCaps(s)) return s;
     return s
         .split(' ')
-        .map((w) {
-          if (w.isEmpty) return w;
-          return w[0].toUpperCase() + w.substring(1).toLowerCase();
-        })
+        .map(
+          (w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1).toLowerCase(),
+        )
         .join(' ');
   }
 
   void _updateCurrentSong(Map<String, String> metadata) {
-    if (metadata.isNotEmpty) {
-      final rawSong = metadata['title'] ?? 'Feniks Radio';
-      final rawArtist = metadata['artist'] ?? 'Samo dobre vijesti!';
-      final newSong = _formatSongTitle(rawSong);
-      final newArtist = _formatArtistName(rawArtist);
-      _currentSong = newSong;
-      _currentArtist = newArtist;
-      final genre = metadata['genre'];
-      if (genre != null && genre.isNotEmpty) {
-        trackMusicGenre(genre);
-      }
-      _isFetchingCurrentSong = false;
-      notifyListeners();
+    if (metadata.isEmpty) return;
+    _currentSong = _formatSongTitle(metadata['title'] ?? kFallbackTitle);
+    _currentArtist = _formatArtistName(metadata['artist'] ?? kFallbackArtist);
+    _isFetchingCurrentSong = false;
+    _trackCurrentSongHeard();
+    notifyListeners();
+  }
+
+  /// Counts the current song for discovery badges, only while actually listening.
+  void _trackCurrentSongHeard() {
+    if (!_sessionActive || isFallbackSong) return;
+    if (hasBadge('song_hunter')) return; // nothing left to unlock
+    if (_uniqueSongs.add(currentSongDisplay.toLowerCase())) {
+      _checkDiscovery();
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Player
+  // ---------------------------------------------------------------------------
   Future<void> init() async {
+    await _loadSettings();
+    if (enablePersistence && _notificationsEnabled) {
+      // Re-schedule the daily reminder (keeps the time right after DST changes).
+      // Not awaited: scheduling 30 reminders must not delay the app start.
+      unawaited(
+        NotificationService.instance
+            .scheduleDailyGoodNews(
+              hour: _notificationHour,
+              minute: _notificationMinute,
+            )
+            .catchError((Object e) {
+              if (kDebugMode) debugPrint('Error scheduling reminder: $e');
+            }),
+      );
+    }
     try {
-      _appInstallDate ??= DateTime.now();
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
       await _player.setAudioSource(AudioSource.uri(Uri.parse(kStreamUrl)));
       await _player.setVolume(_volume);
-      _initialized = true;
-
-      // Points and stats come from Firestore when user is logged in (loaded on HomePage)
-
-      // Start metadata service and listen for updates
-      _metadataService.start();
-      _metadataService.metadataStream?.listen(_updateCurrentSong);
-
-      // Get initial metadata
-      updateSong();
-      _checkMilestoneAchievements();
-
-      notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('Error initializing audio player: $e');
-      // Still mark as initialized so the UI can continue to work
-      _initialized = true;
-
-      // Start metadata service even if audio fails
-      _metadataService.start();
-      _metadataService.metadataStream?.listen(_updateCurrentSong);
-      updateSong();
-      _checkMilestoneAchievements();
-
-      notifyListeners();
     }
+    _initialized = true;
+    _metadataService.start();
+    _metadataService.metadataStream?.listen(_updateCurrentSong);
+    updateSong();
+    _startTicker();
+    notifyListeners();
+  }
+
+  Duration _lastPosition = Duration.zero;
+  bool? _lastListeningLogged;
+
+  /// True while audio is really coming out. On iOS a live stream can report
+  /// "buffering" for the whole time it plays, so besides the "ready" state we
+  /// also accept "buffering" when the playback position keeps moving.
+  bool _isListeningNow() {
+    final player = _player;
+    final state = player.processingState;
+    final position = player.position;
+    final advanced = (position - _lastPosition).inMilliseconds > 200;
+    _lastPosition = position;
+    final listening =
+        player.playing &&
+        (state == ProcessingState.ready ||
+            (state == ProcessingState.buffering && advanced));
+    if (kDebugMode && listening != _lastListeningLogged) {
+      _lastListeningLogged = listening;
+      debugPrint(
+        '[Feniks] listening=$listening state=$state position=$position '
+        'total=${_totalListeningSeconds}s',
+      );
+    }
+    return listening;
   }
 
   Future<void> play() async {
     try {
-      final now = DateTime.now();
-
-      _sessionStartTime = now;
-      _continuousSessionStart = now;
-      _qualitySessionStart = now;
-
-      // Track fast start for speed_start achievement (play within 5 seconds of app start or last stop)
-      if (_lastStopTime != null) {
-        final timeSinceLastStop = now.difference(_lastStopTime!).inSeconds;
-        if (timeSinceLastStop <= 5) {
-          trackFastStart();
-        }
-      } else {
-        // First play after app start - could be considered fast start
-        // Track it if app was just initialized
-        trackFastStart();
-      }
-
-      // Track first listen achievement
-      if (!_hasPlayedBefore) {
-        _hasPlayedBefore = true;
-        _awardBadge('first_listen');
-      }
-
-      // Track time-based achievements
-      _checkTimeBasedAchievements(now);
-
-      // Track consecutive days
-      _updateConsecutiveDays(now);
-
-      await _player.play();
-
-      // Track successful play for "first playing" achievement
-      if (!_hasPlayedSuccessfully) {
-        _hasPlayedSuccessfully = true;
-        _awardBadge('first_playing');
-      }
-
-      // Start timer to update session duration every second for UI
-      _sessionTimer?.cancel();
-      _sessionTimer = Timer.periodic(
-        const Duration(seconds: 1),
-        (_) => notifyListeners(),
+      // Note: just_audio's play() future completes only when playback stops,
+      // so it must not be awaited before tracking starts.
+      unawaited(
+        _player.play().catchError((Object e) {
+          if (kDebugMode) debugPrint('Error playing audio: $e');
+        }),
       );
-
-      // Check technical achievements periodically
-      _startTechnicalTracking();
-
-      updateSong(); // Update song when starting to play
+      _startTicker();
+      updateSong();
       notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('Error playing audio: $e');
-      // Reset session start time if play failed
-      _sessionTimer?.cancel();
-      _sessionTimer = null;
-      _sessionStartTime = null;
-      _continuousSessionStart = null;
-      _qualitySessionStart = null;
       notifyListeners();
     }
   }
 
   Future<void> pause() async {
-    _trackSessionEnd();
     await _player.pause();
+    _endSession();
   }
 
   Future<void> stop() async {
-    _trackSessionEnd();
     await _player.stop();
-  }
-
-  void _trackSessionEnd() {
-    _sessionTimer?.cancel();
-    _sessionTimer = null;
-    if (_sessionStartTime != null) {
-      final sessionDuration = DateTime.now().difference(_sessionStartTime!);
-      final sessionMinutes = sessionDuration.inMinutes;
-
-      _todayListeningSeconds += sessionDuration.inSeconds;
-      _totalListeningMinutes += sessionMinutes;
-      _sessionCount++;
-
-      // Track continuous listening for stable_connection achievement
-      if (_continuousSessionStart != null) {
-        final continuousDuration = DateTime.now().difference(
-          _continuousSessionStart!,
-        );
-        final continuousMinutes = continuousDuration.inMinutes;
-        if (continuousMinutes >=
-            (_allBadges['stable_connection']!['requirement'] as int)) {
-          _awardBadge('stable_connection');
-        }
-      }
-
-      // Track quality listening for quality_listener achievement
-      if (_qualitySessionStart != null) {
-        final qualityDuration = DateTime.now().difference(
-          _qualitySessionStart!,
-        );
-        final qualityMinutes = qualityDuration.inMinutes;
-        if (qualityMinutes >=
-            (_allBadges['quality_listener']!['requirement'] as int)) {
-          _awardBadge('quality_listener');
-        }
-      }
-
-      // Track longest session
-      if (sessionMinutes > _longestSessionDuration) {
-        _longestSessionDuration = sessionMinutes;
-      }
-
-      // Add this session's points to cumulative listening points (persisted in Firestore)
-      _listeningPoints += (sessionMinutes * 1.67).round();
-
-      // Check achievements based on session duration
-      _checkSessionAchievements(sessionMinutes);
-      _checkDailyListeningAchievements();
-      _checkTotalListeningAchievements();
-      _checkSessionCountAchievements();
-
-      _lastStopTime = DateTime.now();
-      _sessionStartTime = null;
-      _continuousSessionStart = null;
-      _qualitySessionStart = null;
-      onProgressChanged?.call();
-      unawaited(_syncProgressToFirestore());
-      notifyListeners();
-    }
-  }
-
-  void _startTechnicalTracking() {
-    // This would be called periodically during playback to check connection stability
-    // For now, we track it when session ends
+    _endSession();
   }
 
   Stream<PlayerState> get playerStateStream => _player.playerStateStream;
   Duration? get position => _player.position;
   bool get playing => _player.playing;
 
-  /// Current session listening duration (updates every second while playing).
-  Duration get currentSessionDuration {
-    if (_sessionStartTime == null) return Duration.zero;
-    return DateTime.now().difference(_sessionStartTime!);
+  /// Real listening time of the current session (pauses for buffering excluded).
+  Duration get currentSessionDuration =>
+      Duration(seconds: _sessionListenedSeconds);
+
+  void _startTicker() {
+    _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
   }
 
-  // Feniks Points management methods
-  void addMessagePoints() {
-    _messagesSent++;
+  void _onTick() {
+    _tick(listening: _isListeningNow(), playerPlaying: _player.playing);
+  }
+
+  /// Simulates one timer tick (used by tests; the clock is advanced by the test).
+  @visibleForTesting
+  void debugTick({required bool listening}) =>
+      _tick(listening: listening, playerPlaying: listening);
+
+  /// Feeds now-playing metadata as if it came from the station (tests only).
+  @visibleForTesting
+  void debugSetSong(String title, String artist) =>
+      _updateCurrentSong({'title': title, 'artist': artist});
+
+  void _tick({required bool listening, required bool playerPlaying}) {
+    final now = _clock();
+    final last = _lastTick ?? now;
+    _lastTick = now;
+    _rollOverDayIfNeeded(now);
+
+    if (!listening) {
+      // Stopped by the user or the system (call, other app, lost connection...).
+      if (_sessionActive && !playerPlaying) _endSession();
+      return;
+    }
+
+    if (!_sessionActive) {
+      // Count from the first tick on, so time before playback can never leak in.
+      _startSession();
+      _msCarry = 0;
+      notifyListeners();
+      return;
+    }
+
+    // Cap the delta so that a suspended timer can never award phantom time.
+    var deltaMs = now.difference(last).inMilliseconds;
+    if (deltaMs < 0) deltaMs = 0;
+    if (deltaMs > 60000) deltaMs = 60000;
+    _msCarry += deltaMs;
+    final delta = _msCarry ~/ 1000;
+    _msCarry -= delta * 1000;
+    if (delta == 0) return;
+
+    _todayListeningSeconds += delta;
+    _totalListeningSeconds += delta;
+    _sessionListenedSeconds += delta;
+    _secondsTowardsMinute += delta;
+
+    while (_secondsTowardsMinute >= 60) {
+      _secondsTowardsMinute -= 60;
+      _onListeningMinute(now);
+    }
+
     notifyListeners();
   }
 
-  void _addBadgePoints(int points) {
-    _badgePoints += points;
+  void _startSession() {
+    _sessionActive = true;
+    _sessionCounted = false;
+    _sessionListenedSeconds = 0;
+    if (!_hasPlayedBefore) {
+      _hasPlayedBefore = true;
+      _awardBadge('first_listen');
+    }
+    _trackCurrentSongHeard();
+  }
+
+  void _endSession() {
+    if (!_sessionActive) return;
+    _sessionActive = false;
+    final minutes = _sessionListenedSeconds ~/ 60;
+    if (minutes > _longestSessionMinutes) _longestSessionMinutes = minutes;
+    _requestSync();
     notifyListeners();
   }
 
-  // Achievement checking methods (removed duplicate method)
-
-  void _checkTimeBasedAchievements(DateTime now) {
-    final hour = now.hour;
-    final weekday = now.weekday;
-
-    // Early bird (5AM - 8AM)
-    if (hour >= 5 && hour < 8) {
-      _earlyBirdSessions++;
-      if (_earlyBirdSessions >=
-          (_allBadges['early_bird']!['requirement'] as int)) {
-        _awardBadge('early_bird');
-      }
-    }
-
-    // Morning person (6AM - 10AM)
-    if (hour >= 6 && hour < 10) {
-      _morningListens++;
-      if (_morningListens >=
-          (_allBadges['morning_person']!['requirement'] as int)) {
-        _awardBadge('morning_person');
-      }
-    }
-
-    // Afternoon listener (12PM - 6PM)
-    if (hour >= 12 && hour < 18) {
-      _afternoonListens++;
-      if (_afternoonListens >=
-          (_allBadges['afternoon_listener']!['requirement'] as int)) {
-        _awardBadge('afternoon_listener');
-      }
-    }
-
-    // Evening enthusiast (6PM - 10PM)
-    if (hour >= 18 && hour < 22) {
-      _eveningListens++;
-      if (_eveningListens >=
-          (_allBadges['evening_enthusiast']!['requirement'] as int)) {
-        _awardBadge('evening_enthusiast');
-      }
-    }
-
-    // Night owl (10PM - 2AM)
-    if (hour >= 22 || hour < 2) {
-      _nightOwlSessions++;
-      if (_nightOwlSessions >=
-          (_allBadges['night_owl']!['requirement'] as int)) {
-        _awardBadge('night_owl');
-      }
-    }
-
-    // Midnight listener (12AM - 2AM)
-    if (hour >= 0 && hour < 2) {
-      _midnightSessions++;
-      if (_midnightSessions >=
-          (_allBadges['midnight_listener']!['requirement'] as int)) {
-        _awardBadge('midnight_listener');
-      }
-    }
-
-    // Weekend warrior (Saturday and Sunday) - track unique weekend days
-    if (weekday == DateTime.saturday || weekday == DateTime.sunday) {
-      final dateKey = '${now.year}-${now.month}-${now.day}';
-      if (_weekendDaysVisited.add(dateKey)) {
-        if (_weekendDaysVisited.length >=
-            (_allBadges['weekend_warrior']!['requirement'] as int)) {
-          _awardBadge('weekend_warrior');
-        }
-      }
-    }
-
-    // Workday warrior (Monday - Friday) - track unique weekdays
-    if (weekday >= DateTime.monday && weekday <= DateTime.friday) {
-      final dateKey = '${now.year}-${now.month}-${now.day}';
-      if (_weekdayDaysVisited.add(dateKey)) {
-        if (_weekdayDaysVisited.length >=
-            (_allBadges['workday_warrior']!['requirement'] as int)) {
-          _awardBadge('workday_warrior');
-        }
-      }
-    }
-  }
-
-  void _updateConsecutiveDays(DateTime now) {
-    final today = DateTime(now.year, now.month, now.day);
-
-    if (_lastListeningDate == null) {
-      // First time listening
-      _consecutiveDays = 1;
-      _lastListeningDate = today;
-    } else {
-      final lastDate = DateTime(
-        _lastListeningDate!.year,
-        _lastListeningDate!.month,
-        _lastListeningDate!.day,
+  /// Called once for every full minute of real listening.
+  void _onListeningMinute(DateTime now) {
+    if (kDebugMode) {
+      debugPrint(
+        '[Feniks] +1 min (danas ${todayListeningMinutes}min, '
+        'ukupno ${totalListeningMinutes}min, poeni od slušanja $listeningPoints)',
       );
-      final daysDifference = today.difference(lastDate).inDays;
-
-      if (daysDifference == 1) {
-        // Consecutive day
-        _consecutiveDays++;
-        _lastListeningDate = today;
-      } else if (daysDifference > 1) {
-        // Streak broken
-        _consecutiveDays = 1;
-        _lastListeningDate = today;
-      }
-      // If daysDifference == 0, it's the same day, don't change streak
+    }
+    // Listening day (streak, weekend, workweek, total days)
+    if (!_todayCountedAsListeningDay &&
+        todayListeningMinutes >= kMinMinutesForListeningDay) {
+      _todayCountedAsListeningDay = true;
+      _registerListeningDay(now);
     }
 
-    // Check streak achievements
-    _checkStreakAchievements();
-  }
-
-  void _checkStreakAchievements() {
-    final streakAchievements = [
-      'daily_listener',
-      'weekly_champion',
-      'loyal_fan',
-      'legend',
-    ];
-
-    for (final achievementId in streakAchievements) {
-      final requirement = _allBadges[achievementId]!['requirement'] as int;
-      if (_consecutiveDays >= requirement) {
-        _awardBadge(achievementId);
+    // Time of day
+    final slot = _slotFor(now.hour);
+    final todayKey = _dayKey(now);
+    if (_slotLastCountedDay[slot] != todayKey) {
+      final m = (_slotMinutesToday[slot] ?? 0) + 1;
+      _slotMinutesToday[slot] = m;
+      if (m >= kMinMinutesForTimeSlot) {
+        _slotLastCountedDay[slot] = todayKey;
+        _slotDayCounts[slot] = (_slotDayCounts[slot] ?? 0) + 1;
+        _checkSlot(slot);
       }
     }
-  }
 
-  void _checkSessionAchievements(int sessionMinutes) {
-    // Continuous listening achievements
-    if (sessionMinutes >=
-        (_allBadges['ultra_marathon']!['requirement'] as int)) {
-      _awardBadge('ultra_marathon');
+    // Session count (a session counts once it reaches the minimum length)
+    if (!_sessionCounted &&
+        _sessionListenedSeconds >= kMinMinutesForSession * 60) {
+      _sessionCounted = true;
+      _sessionCount++;
+      _checkSessionCount();
+    }
+    final sessionMinutes = _sessionListenedSeconds ~/ 60;
+    if (sessionMinutes > _longestSessionMinutes) {
+      _longestSessionMinutes = sessionMinutes;
+    }
+
+    _checkDailyListening();
+    _checkContinuous();
+    _checkTotalListening();
+
+    // Save progress regularly even without new points or badges.
+    if (_lastSyncAt == null ||
+        now.difference(_lastSyncAt!) >= const Duration(minutes: 5)) {
+      _requestSync();
     }
   }
 
-  void _checkDailyListeningAchievements() {
-    final todayMinutes = _todayListeningSeconds ~/ 60;
+  void _registerListeningDay(DateTime now) {
+    final today = _dateOnly(now);
+    final last = _lastListeningDate == null
+        ? null
+        : _dateOnly(_lastListeningDate!);
+    if (last != null && last == today) return; // already counted
 
-    // Daily listening achievements
-    if (todayMinutes >= (_allBadges['first_hour']!['requirement'] as int)) {
-      _awardBadge('first_hour');
+    if (last != null && today.difference(last).inDays == 1) {
+      _consecutiveDays++;
+    } else {
+      _consecutiveDays = 1;
+    }
+    _lastListeningDate = today;
+    _totalListeningDays++;
+
+    if (now.weekday == DateTime.saturday || now.weekday == DateTime.sunday) {
+      _weekendDaysCount++;
+      _checkWeekend();
+    } else {
+      final weekKey = _dayKey(today.subtract(Duration(days: now.weekday - 1)));
+      if (_workweekKey != weekKey) {
+        _workweekKey = weekKey;
+        _workdaysThisWeek.clear();
+      }
+      _workdaysThisWeek.add(now.weekday);
+      _checkWorkweek();
     }
 
-    if (todayMinutes >= (_allBadges['marathon']!['requirement'] as int)) {
-      _awardBadge('marathon');
-    }
-
-    if (todayMinutes >= (_allBadges['five_hours']!['requirement'] as int)) {
-      _awardBadge('five_hours');
-    }
+    _checkStreak();
+    _checkListeningDays();
+    _requestSync();
   }
 
-  void _checkMusicAchievements() {
-    final favoriteCount = _favoriteSongs.length;
-
-    // Music-related achievements
-    if (favoriteCount >= (_allBadges['music_lover']!['requirement'] as int)) {
-      _awardBadge('music_lover');
-    }
-
-    if (favoriteCount >=
-        (_allBadges['music_collector']!['requirement'] as int)) {
-      _awardBadge('music_collector');
-    }
-
-    if (favoriteCount >= (_allBadges['music_expert']!['requirement'] as int)) {
-      _awardBadge('music_expert');
-    }
-
-    if (favoriteCount >= (_allBadges['music_master']!['requirement'] as int)) {
-      _awardBadge('music_master');
-    }
+  void _rollOverDayIfNeeded(DateTime now) {
+    final key = _dayKey(now);
+    if (key == _todayKey) return;
+    _todayKey = key;
+    _todayListeningSeconds = 0;
+    _todayCountedAsListeningDay = false;
+    _slotMinutesToday.clear();
+    notifyListeners();
   }
 
-  // Method to track page visits for app explorer achievement
+  static String _slotFor(int hour) {
+    for (final e in _timeSlots.entries) {
+      if (hour >= e.value[0] && hour < e.value[1]) return e.key;
+    }
+    return 'night_owl';
+  }
+
+  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  static String _dayKey(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+
+  // ---------------------------------------------------------------------------
+  // Page visits
+  // ---------------------------------------------------------------------------
   void trackPageVisit(String pageName) {
-    if (!_visitedPages.contains(pageName)) {
-      _visitedPages.add(pageName);
-      _pagesVisited = _visitedPages.length;
+    if (!kExplorablePages.contains(pageName)) return;
+    if (_visitedPages.contains(pageName)) return;
+    _visitedPages.add(pageName);
+    _checkExplorer();
+    _requestSync();
+  }
 
-      if (_pagesVisited >=
-          (_allBadges['app_explorer']!['requirement'] as int)) {
-        _awardBadge('app_explorer');
-      }
-      onProgressChanged?.call();
-      unawaited(_syncProgressToFirestore());
-    }
+  // ---------------------------------------------------------------------------
+  // Firestore sync
+  // ---------------------------------------------------------------------------
+  void _requestSync() {
+    unawaited(_syncProgressToFirestore());
+  }
+
+  /// Saves progress and the leaderboard entry now (no-op when logged out).
+  Future<void> syncNow() => _syncProgressToFirestore();
+
+  /// Waits until a save that is already running has finished (max [timeout]).
+  Future<void> waitForPendingSync({
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    final done = _syncDone;
+    if (done == null) return;
+    try {
+      await done.future.timeout(timeout);
+    } catch (_) {}
   }
 
   Future<void> _syncProgressToFirestore() async {
-    if (_syncInProgress) return;
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    _syncInProgress = true;
+    if (!enableSync) return;
+    User? user;
     try {
-      await FirestoreService.instance.saveUserAchievements(
-        user.uid,
-        getAchievementData(),
-      );
-      await FirestoreService.instance.updateLeaderboardEntry(
-        user.uid,
-        user.displayName ?? 'Anonim',
-        totalFeniksPoints,
-        earnedBadges.length,
-      );
+      user = FirebaseAuth.instance.currentUser;
+    } catch (_) {
+      return;
+    }
+    if (user == null) return;
+    // Never overwrite the saved progress before it has been loaded.
+    if (loadedUserId != user.uid) return;
+    if (_syncInProgress) {
+      _syncAgain = true; // make sure the latest state gets written too
+      return;
+    }
+    _syncInProgress = true;
+    final done = _syncDone = Completer<void>();
+    try {
+      do {
+        // Stop if the user logged out / progress was reset meanwhile, so an
+        // empty state can never overwrite the saved progress.
+        if (loadedUserId != user.uid) break;
+        _syncAgain = false;
+        _lastSyncAt = _clock();
+        // Take one consistent snapshot before any await.
+        final data = getAchievementData();
+        final listening = listeningPoints;
+        final badges = badgePoints;
+        final badgeCount = _earnedBadges.length;
+        await FirestoreService.instance.saveUserAchievements(user.uid, data);
+        await FirestoreService.instance.updateLeaderboardEntry(
+          user.uid,
+          displayName: user.displayName ?? 'Anonim',
+          listeningPoints: listening,
+          badgePoints: badges,
+          badgeCount: badgeCount,
+        );
+      } while (_syncAgain);
     } catch (_) {
       // Keep app stable if Firestore rules are strict.
     } finally {
       _syncInProgress = false;
+      done.complete();
+      if (identical(_syncDone, done)) _syncDone = null;
     }
   }
 
-  // Track sharing for social achievements
-  void trackShare() {
-    _sharesCount++;
-  }
-
-  // Track fast starts for Brzinski Start achievement
-  void trackFastStart() {
-    _fastStartCount++;
-    if (_fastStartCount >= (_allBadges['speed_start']!['requirement'] as int)) {
-      _awardBadge('speed_start');
-    }
-  }
-
-  // New achievement checking methods
-  void _checkTotalListeningAchievements() {
-    if (_totalListeningMinutes >=
-        (_allBadges['ten_hours']!['requirement'] as int)) {
-      _awardBadge('ten_hours');
-    }
-    if (_totalListeningMinutes >=
-        (_allBadges['fifty_hours']!['requirement'] as int)) {
-      _awardBadge('fifty_hours');
-    }
-    if (_totalListeningMinutes >=
-        (_allBadges['hundred_hours']!['requirement'] as int)) {
-      _awardBadge('hundred_hours');
-    }
-  }
-
-  void _checkSessionCountAchievements() {
-    if (_sessionCount >= (_allBadges['ten_sessions']!['requirement'] as int)) {
-      _awardBadge('ten_sessions');
-    }
-    if (_sessionCount >=
-        (_allBadges['fifty_sessions']!['requirement'] as int)) {
-      _awardBadge('fifty_sessions');
-    }
-    if (_sessionCount >=
-        (_allBadges['hundred_sessions']!['requirement'] as int)) {
-      _awardBadge('hundred_sessions');
-    }
-  }
-
-  // Methods to track new song discovery
-  void trackSongHeard(String songTitle) {
-    if (_uniqueSongs.add(songTitle)) {
-      if (_uniqueSongs.length >=
-          (_allBadges['song_discoverer']!['requirement'] as int)) {
-        _awardBadge('song_discoverer');
-      }
-    }
-  }
-
-  void trackMusicGenre(String genre) {
-    if (_musicGenres.add(genre)) {
-      if (_musicGenres.length >=
-          (_allBadges['genre_explorer']!['requirement'] as int)) {
-        _awardBadge('genre_explorer');
-      }
-    }
-  }
-
-  // Social tracking methods
-  void trackReferral() {
-    _referralCount++;
-  }
-
-  void markAsCommunityMember() {
-    if (!_isCommunityMember) {
-      _isCommunityMember = true;
-    }
-  }
-
-  // Special achievements
-  void trackHolidayListening() {}
-
-  void trackBirthdayListening() {}
-
-  void triggerSecretAchievement() {}
-
-  void trackDeveloperMessage() {}
-
-  void trackBetaFeatureUsage() {}
-
-  // Milestone checking
-  void _checkMilestoneAchievements() {
-    if (_appInstallDate != null) {
-      final daysSinceInstall = DateTime.now()
-          .difference(_appInstallDate!)
-          .inDays;
-
-      if (daysSinceInstall >=
-              (_allBadges['first_week']!['requirement'] as int) &&
-          !hasBadge('first_week')) {
-        _awardBadge('first_week');
-      }
-      if (daysSinceInstall >=
-              (_allBadges['first_month']!['requirement'] as int) &&
-          !hasBadge('first_month')) {
-        _awardBadge('first_month');
-      }
-      if (daysSinceInstall >=
-              (_allBadges['loyal_user']!['requirement'] as int) &&
-          !hasBadge('loyal_user')) {
-        _awardBadge('loyal_user');
-      }
-    }
-  }
-
-  // Competitive achievement methods (these would typically be called from leaderboard service)
-  // In-memory storage methods (temporary solution)
-  void _saveProgress() {
-    // For now, just keep everything in memory
-    // This will reset when app restarts, but achievements will still work during session
-    if (kDebugMode)
-      debugPrint(
-        'Achievement progress saved in memory (SharedPreferences not available)',
-      );
-  }
-
-  void _saveSettings() {
-    // For now, settings are in memory only
-    if (kDebugMode) debugPrint('Settings saved in memory');
-  }
-
-  void _updateAudioQuality() {
-    // Update audio stream URL based on quality setting
-    if (_initialized) {
-      final url = _highQuality
-          ? 'https://c30.radioboss.fm:8234/autodj' // High quality stream
-          : 'https://c30.radioboss.fm:8234/repetitor'; // Lower quality stream
-      _player.setAudioSource(AudioSource.uri(Uri.parse(url)));
-    }
-  }
-
-  void _loadProgress() {
-    // Set default values for first-time users
-    // Only set install date if it hasn't been set before (persist this in SharedPreferences in production)
-    _appInstallDate ??= DateTime.now();
-
-    // Reset flags for testing
-    _hasPlayedBefore = false;
-    _hasPlayedSuccessfully = false;
-
-    // Initialize empty achievement data
-
-    notifyListeners();
-  }
-
-  // Call this when the app starts
-  Future<void> initialize() async {
-    if (_initialized) return;
-
-    _loadProgress();
-
-    final session = await AudioSession.instance;
-    await session.configure(const AudioSessionConfiguration.speech());
-    await _player.setAudioSource(AudioSource.uri(Uri.parse(kStreamUrl)));
-
-    _metadataService.start();
-    _metadataService.metadataStream?.listen((metadata) {
-      final rawTitle = metadata['title'] ?? 'Feniks Radio';
-      final rawArtist = metadata['artist'] ?? 'Samo dobre vijesti!';
-      _currentSong = _formatSongTitle(rawTitle);
-      _currentArtist = _formatArtistName(rawArtist);
-
-      // Track unique songs for discovery achievements
-      if (_currentSong != 'Feniks Radio') {
-        trackSongHeard(_currentSong);
-      }
-
-      notifyListeners();
-    });
-
-    // Check milestone achievements after loading progress
-    _checkMilestoneAchievements();
-
-    _initialized = true;
-    notifyListeners();
-  }
-
-  /// Returns a map of all achievement-related data for Firestore persistence.
+  /// Returns all achievement-related data for Firestore persistence.
   Map<String, dynamic> getAchievementData() {
     return {
       'earnedBadges': _earnedBadges
@@ -1422,133 +1107,220 @@ class RadioPlayerModel extends ChangeNotifier {
           .toList(),
       'consecutiveDays': _consecutiveDays,
       'lastListeningDate': _lastListeningDate?.toIso8601String(),
-      'totalListeningMinutes': _totalListeningMinutes,
+      'totalListeningDays': _totalListeningDays,
+      'totalListeningSeconds': _totalListeningSeconds,
+      'totalListeningMinutes': totalListeningMinutes,
       'sessionCount': _sessionCount,
+      'longestSessionDuration': _longestSessionMinutes,
       'favoriteSongs': List<String>.from(_favoriteSongs),
-      'earlyBirdSessions': _earlyBirdSessions,
-      'nightOwlSessions': _nightOwlSessions,
-      'midnightSessions': _midnightSessions,
-      'morningListens': _morningListens,
-      'afternoonListens': _afternoonListens,
-      'eveningListens': _eveningListens,
-      'weekendDaysVisited': _weekendDaysVisited.toList(),
-      'weekdayDaysVisited': _weekdayDaysVisited.toList(),
+      'slotDayCounts': Map<String, int>.from(_slotDayCounts),
+      'slotLastCountedDay': Map<String, String>.from(_slotLastCountedDay),
+      'weekendDaysCount': _weekendDaysCount,
+      'workweekKey': _workweekKey,
+      'workdaysThisWeek': _workdaysThisWeek.toList(),
       'uniqueSongs': _uniqueSongs.toList(),
-      'musicGenres': _musicGenres.toList(),
-      'pagesVisited': _pagesVisited,
       'visitedPages': List<String>.from(_visitedPages),
-      'sharesCount': _sharesCount,
-      'fastStartCount': _fastStartCount,
       'hasPlayedBefore': _hasPlayedBefore,
-      'hasPlayedSuccessfully': _hasPlayedSuccessfully,
-      'appInstallDate': _appInstallDate?.toIso8601String(),
-      'referralCount': _referralCount,
-      'isCommunityMember': _isCommunityMember,
-      'top10Weeks': _top10Weeks,
-      'badgePoints': _badgePoints,
-      'messagesSent': _messagesSent,
-      'listeningPoints': _listeningPoints,
+      'badgePoints': badgePoints,
+      'listeningPoints': listeningPoints,
       'todayListeningSeconds': _todayListeningSeconds,
-      'dateForTodayListening': DateTime.now()
-          .toIso8601String()
-          .split('T')
-          .first,
-      'longestSessionDuration': _longestSessionDuration,
+      'dateForTodayListening': _todayKey,
+      'todayCountedAsListeningDay': _todayCountedAsListeningDay,
     };
   }
 
-  /// Restores achievement state from Firestore data.
+  /// Restores achievement state from Firestore data (also migrates data saved
+  /// by older app versions).
   void loadAchievementData(Map<String, dynamic>? data) {
     if (data == null) return;
+
+    _earnedBadges.clear();
     final badges = data['earnedBadges'] as List<dynamic>?;
     if (badges != null) {
-      _earnedBadges.clear();
       for (final b in badges) {
         final map = Map<String, dynamic>.from(b as Map);
         final id = map['id'] as String?;
-        // Migrate old badge id to new (e.g. speed_demon -> speed_start)
-        final resolvedId = id == 'speed_demon' ? 'speed_start' : id;
-        if (resolvedId != null && _allBadges.containsKey(resolvedId)) {
-          final full = Map<String, dynamic>.from(_allBadges[resolvedId]!);
+        if (id != null && _allBadges.containsKey(id) && !hasBadge(id)) {
+          final full = Map<String, dynamic>.from(_allBadges[id]!);
           full['earnedDate'] =
-              map['earnedDate'] ?? DateTime.now().toIso8601String();
+              map['earnedDate'] ?? _clock().toIso8601String();
           _earnedBadges.add(full);
         }
       }
     }
-    _consecutiveDays = data['consecutiveDays'] as int? ?? 0;
+
+    _consecutiveDays = (data['consecutiveDays'] as num?)?.toInt() ?? 0;
     final last = data['lastListeningDate'] as String?;
     _lastListeningDate = last != null ? DateTime.tryParse(last) : null;
-    _totalListeningMinutes = data['totalListeningMinutes'] as int? ?? 0;
-    _sessionCount = data['sessionCount'] as int? ?? 0;
-    final fav = data['favoriteSongs'] as List<dynamic>?;
-    if (fav != null) {
-      _favoriteSongs.clear();
-      _favoriteSongs.addAll(fav.cast<String>());
+
+    final seconds = (data['totalListeningSeconds'] as num?)?.toInt();
+    final minutes = (data['totalListeningMinutes'] as num?)?.toInt() ?? 0;
+    _totalListeningSeconds = seconds ?? minutes * 60;
+
+    _sessionCount = (data['sessionCount'] as num?)?.toInt() ?? 0;
+    _longestSessionMinutes =
+        (data['longestSessionDuration'] as num?)?.toInt() ?? 0;
+
+    _favoriteSongs
+      ..clear()
+      ..addAll((data['favoriteSongs'] as List<dynamic>? ?? []).cast<String>());
+
+    // Time of day counters (old versions stored counts per play under other keys)
+    _slotDayCounts.clear();
+    final slotCounts = data['slotDayCounts'];
+    if (slotCounts is Map) {
+      slotCounts.forEach((k, v) {
+        if (v is num) _slotDayCounts[k.toString()] = v.toInt();
+      });
     }
-    _earlyBirdSessions = data['earlyBirdSessions'] as int? ?? 0;
-    _nightOwlSessions = data['nightOwlSessions'] as int? ?? 0;
-    _midnightSessions = data['midnightSessions'] as int? ?? 0;
-    _morningListens = data['morningListens'] as int? ?? 0;
-    _afternoonListens = data['afternoonListens'] as int? ?? 0;
-    _eveningListens = data['eveningListens'] as int? ?? 0;
-    final wkd = data['weekendDaysVisited'] as List<dynamic>?;
-    if (wkd != null) {
-      _weekendDaysVisited.clear();
-      _weekendDaysVisited.addAll(wkd.cast<String>());
+    _slotLastCountedDay.clear();
+    final slotDays = data['slotLastCountedDay'];
+    if (slotDays is Map) {
+      slotDays.forEach((k, v) {
+        if (v is String) _slotLastCountedDay[k.toString()] = v;
+      });
     }
-    final wkdd = data['weekdayDaysVisited'] as List<dynamic>?;
-    if (wkdd != null) {
-      _weekdayDaysVisited.clear();
-      _weekdayDaysVisited.addAll(wkdd.cast<String>());
-    }
-    final songs = data['uniqueSongs'] as List<dynamic>?;
-    if (songs != null) {
-      _uniqueSongs.clear();
-      _uniqueSongs.addAll(songs.cast<String>());
-    }
-    final genres = data['musicGenres'] as List<dynamic>?;
-    if (genres != null) {
-      _musicGenres.clear();
-      _musicGenres.addAll(genres.cast<String>());
-    }
-    _pagesVisited = data['pagesVisited'] as int? ?? 0;
-    final vp = data['visitedPages'] as List<dynamic>?;
-    if (vp != null) {
-      _visitedPages.clear();
-      _visitedPages.addAll(vp.cast<String>());
-    }
-    _sharesCount = data['sharesCount'] as int? ?? 0;
-    _fastStartCount = data['fastStartCount'] as int? ?? 0;
+
+    // Weekend days (old versions stored a list of weekend dates)
+    final oldWeekend = data['weekendDaysVisited'] as List<dynamic>?;
+    _weekendDaysCount = (data['weekendDaysCount'] as num?)?.toInt() ??
+        (oldWeekend?.length ?? 0);
+
+    _workweekKey = data['workweekKey'] as String?;
+    _workdaysThisWeek
+      ..clear()
+      ..addAll(
+        (data['workdaysThisWeek'] as List<dynamic>? ?? [])
+            .whereType<num>()
+            .map((e) => e.toInt()),
+      );
+
+    // Total listening days (old versions did not track this)
+    _totalListeningDays = (data['totalListeningDays'] as num?)?.toInt() ??
+        (_consecutiveDays > 0 ? _consecutiveDays : 0);
+
+    _uniqueSongs
+      ..clear()
+      ..addAll(
+        (data['uniqueSongs'] as List<dynamic>? ?? [])
+            .map((e) => e.toString().toLowerCase()),
+      );
+    _visitedPages
+      ..clear()
+      ..addAll(
+        (data['visitedPages'] as List<dynamic>? ?? [])
+            .map((e) => e.toString())
+            .where(kExplorablePages.contains),
+      );
     _hasPlayedBefore = data['hasPlayedBefore'] as bool? ?? false;
-    _hasPlayedSuccessfully = data['hasPlayedSuccessfully'] as bool? ?? false;
-    final install = data['appInstallDate'] as String?;
-    _appInstallDate = install != null ? DateTime.tryParse(install) : null;
-    _referralCount = data['referralCount'] as int? ?? 0;
-    _isCommunityMember = data['isCommunityMember'] as bool? ?? false;
-    _top10Weeks = data['top10Weeks'] as int? ?? 0;
-    _badgePoints = data['badgePoints'] as int? ?? 0;
-    _messagesSent = data['messagesSent'] as int? ?? 0;
-    _listeningPoints = data['listeningPoints'] as int? ?? 0;
+
     final dateForToday = data['dateForTodayListening'] as String?;
-    final todayStr = DateTime.now().toIso8601String().split('T').first;
-    if (dateForToday == todayStr) {
-      _todayListeningSeconds = data['todayListeningSeconds'] as int? ?? 0;
+    final todayKey = _dayKey(_clock());
+    _todayKey = todayKey;
+    if (dateForToday != null && _normalizeDayKey(dateForToday) == todayKey) {
+      _todayListeningSeconds =
+          (data['todayListeningSeconds'] as num?)?.toInt() ?? 0;
+      _todayCountedAsListeningDay =
+          data['todayCountedAsListeningDay'] as bool? ??
+          (_lastListeningDate != null &&
+              _dateOnly(_lastListeningDate!) == _dateOnly(_clock()));
     } else {
       _todayListeningSeconds = 0;
+      _todayCountedAsListeningDay = false;
     }
-    _longestSessionDuration = data['longestSessionDuration'] as int? ?? 0;
-    _checkMilestoneAchievements();
+
+    _pendingBadges.clear();
+    // Award anything that the stored progress already qualifies for, without
+    // showing a popup storm for badges earned by old progress.
+    final callback = onAchievementEarned;
+    onAchievementEarned = null;
+    checkAndAwardBadges();
+    onAchievementEarned = callback;
+    _pendingBadges.clear();
+
     notifyListeners();
+  }
+
+  /// Loads the saved progress of [uid]. Anything listened before the data
+  /// was loaded (e.g. without being logged in) is added on top, so it is not lost.
+  void loadUserProgress(String uid, Map<String, dynamic>? data) {
+    final mergeGuest = loadedUserId == null;
+    final guestTotal = _totalListeningSeconds;
+    final guestToday = _todayKey == _dayKey(_clock()) ? _todayListeningSeconds : 0;
+    final guestSessions = _sessionCount;
+    final guestLongest = _longestSessionMinutes;
+    final guestPlayed = _hasPlayedBefore;
+    final guestPages = List<String>.from(_visitedPages);
+    final guestSongs = Set<String>.from(_uniqueSongs);
+
+    loadAchievementData(data ?? <String, dynamic>{});
+
+    if (mergeGuest) {
+      _totalListeningSeconds += guestTotal;
+      _todayListeningSeconds += guestToday;
+      _sessionCount += guestSessions;
+      if (guestLongest > _longestSessionMinutes) {
+        _longestSessionMinutes = guestLongest;
+      }
+      _hasPlayedBefore = _hasPlayedBefore || guestPlayed;
+      for (final page in guestPages) {
+        if (!_visitedPages.contains(page)) _visitedPages.add(page);
+      }
+      _uniqueSongs.addAll(guestSongs);
+      final callback = onAchievementEarned;
+      onAchievementEarned = null;
+      checkAndAwardBadges();
+      onAchievementEarned = callback;
+      _pendingBadges.clear();
+    }
+    loadedUserId = uid;
+    notifyListeners();
+  }
+
+  /// Clears all progress (used on logout so the next user starts clean).
+  void resetProgress() {
+    loadedUserId = null;
+    _earnedBadges.clear();
+    _pendingBadges.clear();
+    _totalListeningSeconds = 0;
+    _todayListeningSeconds = 0;
+    _todayKey = _dayKey(_clock());
+    _todayCountedAsListeningDay = false;
+    _slotMinutesToday.clear();
+    _sessionCount = 0;
+    _sessionCounted = _sessionActive; // a running session is not counted again
+    _longestSessionMinutes = 0;
+    _consecutiveDays = 0;
+    _lastListeningDate = null;
+    _totalListeningDays = 0;
+    _weekendDaysCount = 0;
+    _workweekKey = null;
+    _workdaysThisWeek.clear();
+    _slotDayCounts.clear();
+    _slotLastCountedDay.clear();
+    _uniqueSongs.clear();
+    _visitedPages.clear();
+    _favoriteSongs.clear();
+    _hasPlayedBefore = false;
+    notifyListeners();
+  }
+
+  static String _normalizeDayKey(String s) {
+    final parts = s.split('-');
+    if (parts.length != 3) return s;
+    final y = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final d = int.tryParse(parts[2]);
+    if (y == null || m == null || d == null) return s;
+    return _dayKey(DateTime(y, m, d));
   }
 
   @override
   void dispose() {
-    _sessionTimer?.cancel();
-    _sessionTimer = null;
-    _saveProgress(); // Save progress before disposing
-    _metadataService.stop();
-    _player.dispose();
+    _ticker?.cancel();
+    _ticker = null;
+    _metadataInstance?.stop();
+    _playerInstance?.dispose();
     super.dispose();
   }
 }

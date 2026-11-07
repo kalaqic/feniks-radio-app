@@ -5,7 +5,6 @@ import '../theme/theme_provider.dart';
 import '../models/radio_player_model.dart';
 import '../services/auth_service.dart';
 import '../widgets/login_required_dialog.dart';
-import '../pages/favorites_page.dart';
 import '../utils/text_formatting.dart';
 
 String _formatDuration(Duration d) {
@@ -283,6 +282,18 @@ class CurrentlyPlayingCard extends StatelessWidget {
                             );
                             return;
                           }
+                          if (!model.isFavorite(model.currentSongDisplay) &&
+                              model.isFallbackSong) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Trenutno nema informacija o pjesmi.',
+                                ),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                            return;
+                          }
                           model.toggleFavorite();
                         },
                         child: Padding(
@@ -346,12 +357,7 @@ class CurrentlyPlayingCard extends StatelessWidget {
                   child: InkWell(
                     borderRadius: BorderRadius.circular(10),
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const FavoritesPage(),
-                        ),
-                      );
+                      Navigator.pushNamed(context, '/favorites');
                     },
                     child: const Padding(
                       padding: EdgeInsets.symmetric(
@@ -389,3 +395,4 @@ class CurrentlyPlayingCard extends StatelessWidget {
     );
   }
 }
+

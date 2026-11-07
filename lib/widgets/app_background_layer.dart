@@ -84,18 +84,24 @@ class _AppBackgroundOverlayState extends State<AppBackgroundOverlay>
 class _AppBackgroundLayerState extends State<AppBackgroundLayer>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-  late final Animation<double> _shift;
+
+  /// The circles move with the wall clock, so every page's background is in
+  /// exactly the same position and nothing jumps during page transitions.
+  double get _shiftValue {
+    const cycleMs = 16000; // 8 s forward + 8 s back
+    final t = (DateTime.now().millisecondsSinceEpoch % cycleMs) / cycleMs;
+    final triangle = t < 0.5 ? t * 2 : 2 - t * 2;
+    return -0.25 + 0.5 * Curves.easeInOut.transform(triangle);
+  }
 
   @override
   void initState() {
     super.initState();
+    // Only drives repaints; the position itself comes from [_shiftValue].
     _controller = AnimationController(
-      duration: const Duration(seconds: 8),
+      duration: const Duration(seconds: 1),
       vsync: this,
-    )..repeat(reverse: true);
-    _shift = Tween<double>(begin: -0.25, end: 0.25).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    )..repeat();
   }
 
   @override
@@ -109,7 +115,7 @@ class _AppBackgroundLayerState extends State<AppBackgroundLayer>
     final isDarkMode = context.watch<ThemeProvider>().isDarkMode;
     return IgnorePointer(
       child: AnimatedBuilder(
-        animation: _shift,
+        animation: _controller,
         builder: (context, child) {
           return Stack(
             children: [
@@ -127,26 +133,26 @@ class _AppBackgroundLayerState extends State<AppBackgroundLayer>
                 ),
               ),
               Positioned(
-                top: -120 + (_shift.value * 40),
+                top: -120 + (_shiftValue * 40),
                 right: -80,
                 child: Container(
                   width: 260,
                   height: 260,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: AppTheme.primary.withValues(alpha: isDarkMode ? 0.12 : 0.08),
+                    color: AppTheme.primary.withValues(alpha: isDarkMode ? 0.09 : 0.06),
                   ),
                 ),
               ),
               Positioned(
-                bottom: -140 - (_shift.value * 35),
+                bottom: -140 - (_shiftValue * 35),
                 left: -90,
                 child: Container(
                   width: 300,
                   height: 300,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: AppTheme.primaryDark.withValues(alpha: isDarkMode ? 0.10 : 0.06),
+                    color: AppTheme.primaryDark.withValues(alpha: isDarkMode ? 0.08 : 0.045),
                   ),
                 ),
               ),

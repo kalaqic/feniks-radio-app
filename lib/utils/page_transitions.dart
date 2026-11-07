@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/app_background_layer.dart';
 
 class FadePageRoute<T> extends PageRouteBuilder<T> {
   final Widget child;
@@ -113,6 +114,14 @@ Route<T> createRoute<T extends Object?>({
   RouteSettings? settings,
   PageTransitionType? transitionType,
 }) {
+  // Every page brings its own (opaque) background, so during a transition
+  // the new page fully covers the old one instead of showing it through.
+  page = Stack(
+    children: [
+      const Positioned.fill(child: AppBackgroundLayer()),
+      Positioned.fill(child: page),
+    ],
+  );
   switch (transitionType) {
     case PageTransitionType.scaleFade:
       return ScaleFadePageRoute<T>(

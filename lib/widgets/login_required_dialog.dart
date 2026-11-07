@@ -41,7 +41,7 @@ class LoginRequiredDialog extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
+        child: SingleChildScrollView(child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // Icon
@@ -162,7 +162,7 @@ class LoginRequiredDialog extends StatelessWidget {
               ],
             ),
           ],
-        ),
+        )),
       ),
     );
   }

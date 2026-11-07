@@ -19,9 +19,6 @@ class FirestoreService {
   CollectionReference<Map<String, dynamic>> get _leaderboard =>
       _firestore.collection('leaderboard');
 
-  CollectionReference<Map<String, dynamic>> get _messageRequests =>
-      _firestore.collection('messageRequests');
-
   static String _normalizeUsername(String name) =>
       name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
 
@@ -100,23 +97,27 @@ class FirestoreService {
     return doc.data()!['email'] as String?;
   }
 
-  /// Update this user's leaderboard entry (points, badge count, display name).
+  /// Update this user's leaderboard entry. The points are split into
+  /// listening and badge points so the security rules can validate them.
   Future<void> updateLeaderboardEntry(
-    String uid,
-    String displayName,
-    int points,
-    int badgeCount,
-  ) async {
+    String uid, {
+    required String displayName,
+    required int listeningPoints,
+    required int badgePoints,
+    required int badgeCount,
+  }) async {
     await _leaderboard.doc(uid).set({
       'displayName': displayName,
-      'points': points,
+      'points': listeningPoints + badgePoints,
+      'listeningPoints': listeningPoints,
+      'badgePoints': badgePoints,
       'badgeCount': badgeCount,
       'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    });
   }
 
   /// Top [limit] users by points descending.
-  Future<List<Map<String, dynamic>>> getLeaderboardTop({int limit = 10}) async {
+  Future<List<Map<String, dynamic>>> getLeaderboardTop({int limit = 3}) async {
     final q = await _leaderboard
         .orderBy('points', descending: true)
         .limit(limit)
@@ -136,10 +137,14 @@ class FirestoreService {
     return list;
   }
 
-  /// Rank of current user (1-based). Returns null if not on leaderboard or not found.
+  /// All-time rank of the current user (1-based), based on total points.
+  /// Uses an aggregate count so it does not download the whole leaderboard.
   Future<int?> getMyRank(int myPoints) async {
-    final q = await _leaderboard.where('points', isGreaterThan: myPoints).get();
-    return q.docs.length + 1;
+    final agg = await _leaderboard
+        .where('points', isGreaterThan: myPoints)
+        .count()
+        .get();
+    return (agg.count ?? 0) + 1;
   }
 
   /// Load user achievements from Firestore. Returns null if no document.
@@ -151,6 +156,23 @@ class FirestoreService {
     if (achievements is Map<String, dynamic>) return achievements;
     if (achievements is Map) return Map<String, dynamic>.from(achievements);
     return null;
+  }
+
+  /// Deletes everything stored about this user (profile, progress,
+  /// leaderboard entry and username). Used when the account is deleted.
+  Future<void> deleteUserData(String uid, {String? displayName}) async {
+    await _leaderboard.doc(uid).delete();
+    if (displayName != null) {
+      final key = _normalizeUsername(displayName);
+      if (key.isNotEmpty) {
+        try {
+          await _usernameLookup.doc(key).delete();
+        } catch (_) {
+          // Not this user's username entry; nothing to delete.
+        }
+      }
+    }
+    await _users.doc(uid).delete();
   }
 
   /// Optional email the user chooses to display (not the login email). Null if not set.
@@ -171,51 +193,4 @@ class FirestoreService {
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
-
-  /// Returns the timestamp of this user's most recent message, or null if none.
-  /// Reads a single field on `users/{uid}` so no composite index is required.
-  Future<DateTime?> getLastMessageAt(String uid) async {
-    final doc = await _users.doc(uid).get();
-    final data = doc.data();
-    if (data == null) return null;
-    final ts = data['lastMessageAt'];
-    if (ts is Timestamp) return ts.toDate();
-    return null;
-  }
-
-  /// Create a song/message request and stamp the user's last-message time.
-  /// Throws [RateLimitedException] when the user has sent a message in the
-  /// last [cooldown] (default 10 minutes).
-  Future<void> submitMessageRequest({
-    required String uid,
-    required String displayName,
-    required String message,
-    Duration cooldown = const Duration(minutes: 10),
-  }) async {
-    final last = await getLastMessageAt(uid);
-    if (last != null) {
-      final elapsed = DateTime.now().difference(last);
-      if (elapsed < cooldown) {
-        throw RateLimitedException(cooldown - elapsed);
-      }
-    }
-
-    await _messageRequests.add({
-      'uid': uid,
-      'displayName': displayName.trim().isEmpty ? 'Anonim' : displayName.trim(),
-      'message': message.trim(),
-      'status': 'pending',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    await _users.doc(uid).set({
-      'lastMessageAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-  }
-}
-
-class RateLimitedException implements Exception {
-  RateLimitedException(this.remaining);
-  final Duration remaining;
 }

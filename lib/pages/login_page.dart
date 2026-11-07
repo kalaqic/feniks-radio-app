@@ -33,9 +33,10 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       final email = await FirestoreService.instance.getEmailByUsername(_usernameController.text);
-      if (email == null || !mounted) {
+      if (!mounted) return;
+      if (email == null) {
         setState(() => _isLoading = false);
-        if (mounted) _showError('Korisničko ime ili lozinka nisu ispravni.');
+        _showError('Korisničko ime ili lozinka nisu ispravni.');
         return;
       }
 
@@ -92,18 +93,6 @@ class _LoginPageState extends State<LoginPage> {
         ),
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: isDarkMode
-              ? AppTheme.backgroundGradient
-              : const LinearGradient(
-                  colors: [
-                    Color(0xFFF2F2F7),
-                    Color(0xFFFFFFFF),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-        ),
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),

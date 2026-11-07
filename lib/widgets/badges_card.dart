@@ -36,7 +36,6 @@ class BadgesCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
           onTap: () {
-            model.trackPageVisit('/badges');
             Navigator.pushNamed(context, '/badges');
           },
           child: Column(

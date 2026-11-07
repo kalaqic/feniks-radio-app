@@ -1,7 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/radio_player_model.dart';
 
 class ThemeProvider extends ChangeNotifier {
+  ThemeProvider() {
+    _loadSavedTheme();
+  }
+
   bool _isDarkMode = false;
+
+  /// Restores the dark mode choice saved by the settings page.
+  Future<void> _loadSavedTheme() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getBool(RadioPlayerModel.kPrefDarkMode);
+      if (saved != null && saved != _isDarkMode) {
+        _isDarkMode = saved;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
   
   bool get isDarkMode => _isDarkMode;
   

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/radio_player_model.dart';
@@ -5,12 +7,10 @@ import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/currently_playing_card.dart';
 import '../widgets/header_with_volume.dart';
-import '../widgets/ether_messages_card.dart';
 import '../widgets/badges_card.dart';
 import '../widgets/common_footer.dart';
 import '../widgets/celebration_modal.dart';
 import '../widgets/badge_earned_modal.dart';
-import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 
 class HomePage extends StatefulWidget {
@@ -29,7 +29,11 @@ class _HomePageState extends State<HomePage> {
       final auth = context.read<AuthService>();
 
       // Load user data from Firestore when logged in (points, hours, achievements, etc.)
-      if (auth.isAuthenticated && auth.user != null) {
+      // Only once per user: reloading would overwrite progress that was
+      // counted in memory but not yet saved.
+      if (auth.isAuthenticated &&
+          auth.user != null &&
+          model.loadedUserId != auth.user!.uid) {
         try {
           await FirestoreService.instance.ensureUserProfile(
             auth.user!.uid,
@@ -40,63 +44,46 @@ class _HomePageState extends State<HomePage> {
             auth.user!.uid,
           );
           if (mounted) {
-            if (data != null) {
-              model.loadAchievementData(data);
-            } else {
-              // New user: start with clean state and save to DB
-              model.loadAchievementData({});
-              await FirestoreService.instance.saveUserAchievements(
-                auth.user!.uid,
-                model.getAchievementData(),
-              );
-            }
-            await FirestoreService.instance.updateLeaderboardEntry(
-              auth.user!.uid,
-              auth.user!.displayName ?? 'Anonim',
-              model.totalFeniksPoints,
-              model.earnedBadges.length,
-            );
+            // New users (data == null) start clean; progress made before the
+            // data loaded is kept either way.
+            model.loadUserProgress(auth.user!.uid, data);
+            unawaited(model.syncNow());
           }
         } catch (_) {
           // Avoid hard crash when Firestore rules are not ready yet.
         }
       }
 
-      // Set up achievement popup and save to Firestore when a badge is earned
+      if (!mounted) return;
+      model.trackPageVisit('/home');
+
+      // Show a popup when a badge is earned (the model saves it by itself;
+      // the popup must not wait for the network).
       model.onAchievementEarned = (badge) {
         if (!mounted) return;
-        // Save immediately so the badge is persisted; then show popup
-        _saveAchievementsToFirestore().then((_) {
-          if (!mounted) return;
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (dialogContext) => BadgeEarnedModal(
-              badge: badge,
-              onDismiss: () {
-                final bid = badge['id'] as String?;
-                if (bid != null)
-                  context.read<RadioPlayerModel>().markBadgeShown(bid);
-                Navigator.of(dialogContext).pop();
-                if (mounted) _saveAchievementsToFirestore();
-              },
-            ),
-          );
-        });
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => BadgeEarnedModal(
+            badge: badge,
+            onDismiss: () {
+              final bid = badge['id'] as String?;
+              if (bid != null) {
+                context.read<RadioPlayerModel>().markBadgeShown(bid);
+              }
+              Navigator.of(dialogContext).pop();
+            },
+          ),
+        );
       };
 
-      // Save progress to Firestore when it changes (favorites, session end, etc.)
-      model.onProgressChanged = () {
-        if (mounted) _saveAchievementsToFirestore();
-      };
-
-      // Check for badges first
+      // Award anything the loaded progress already qualifies for
       model.checkAndAwardBadges();
 
-      // Auto-play if enabled
-      if (model.autoPlay) {
+      // Auto-play only once per app launch, not on every return to home.
+      if (model.takeAutoPlay() && !model.playing) {
         Future.delayed(const Duration(milliseconds: 500), () {
-          model.play();
+          if (!model.playing) model.play();
         });
       }
 
@@ -128,29 +115,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> _saveAchievementsToFirestore() async {
-    final auth = context.read<AuthService>();
-    final uid = auth.user?.uid;
-    if (uid != null) {
-      final model = context.read<RadioPlayerModel>();
-      try {
-        await FirestoreService.instance.saveUserAchievements(
-          uid,
-          model.getAchievementData(),
-        );
-        final name = auth.user?.displayName ?? 'Anonim';
-        await FirestoreService.instance.updateLeaderboardEntry(
-          uid,
-          name,
-          model.totalFeniksPoints,
-          model.earnedBadges.length,
-        );
-      } catch (_) {
-        // Ignore save failures caused by backend permission setup.
-      }
-    }
-  }
-
   void _showBadgeEarnedModal() {
     final model = context.read<RadioPlayerModel>();
     if (!model.hasPendingBadges) return;
@@ -168,7 +132,6 @@ class _HomePageState extends State<HomePage> {
             final m = context.read<RadioPlayerModel>();
             m.markBadgeShown(badgeId);
             Navigator.of(dialogContext).pop();
-            if (mounted) _saveAchievementsToFirestore();
             if (mounted && m.hasPendingBadges) {
               Future.delayed(const Duration(milliseconds: 500), () {
                 if (mounted) _showBadgeEarnedModal();
@@ -191,16 +154,6 @@ class _HomePageState extends State<HomePage> {
       appBar: const HeaderWithVolume(),
       backgroundColor: Colors.transparent,
       body: Container(
-        decoration: BoxDecoration(
-          gradient: isDarkMode
-              ? AppTheme.backgroundGradient
-              : const LinearGradient(
-                  colors: [Color(0xFFF2F2F7), Color(0xFFFFFFFF)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  stops: [0.0, 1.0],
-                ),
-        ),
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
@@ -212,8 +165,6 @@ class _HomePageState extends State<HomePage> {
               CurrentlyPlayingCard(model: model),
               const SizedBox(height: 24),
               const BadgesCard(),
-              const SizedBox(height: 24),
-              const EtherMessagesCard(),
               const SizedBox(height: 140), // Space for bottom nav
             ],
           ),

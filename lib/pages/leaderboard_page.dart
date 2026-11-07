@@ -7,7 +7,11 @@ import '../widgets/common_footer.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 
-const _avatars = ['🎵', '🎧', '🎼', '🎤', '🎸', '🥁', '🎹', '🎺', '🎻', '🪕'];
+/// First letter of the user's name, shown as the avatar.
+String _initial(Map<String, dynamic> user) {
+  final name = ((user['name'] as String?) ?? '').trim();
+  return name.isEmpty ? '?' : name.characters.first.toUpperCase();
+}
 
 class LeaderboardPage extends StatefulWidget {
   const LeaderboardPage({super.key});
@@ -26,6 +30,9 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
   void initState() {
     super.initState();
     _loadLeaderboard();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<RadioPlayerModel>().trackPageVisit('/leaderboard');
+    });
   }
 
   Future<void> _loadLeaderboard() async {
@@ -34,9 +41,13 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
       _error = null;
     });
     try {
-      final top = await FirestoreService.instance.getLeaderboardTop(limit: 10);
       final auth = context.read<AuthService>();
       final model = context.read<RadioPlayerModel>();
+      // Push my latest points first so my rank is up to date.
+      try {
+        await model.syncNow().timeout(const Duration(seconds: 3));
+      } catch (_) {}
+      final top = await FirestoreService.instance.getLeaderboardTop(limit: 3);
       int? myRank;
       if (auth.isAuthenticated && auth.user != null) {
         myRank = await FirestoreService.instance.getMyRank(model.totalFeniksPoints);
@@ -79,19 +90,6 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
         elevation: isDarkMode ? 0 : null,
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: isDarkMode 
-            ? AppTheme.backgroundGradient
-            : const LinearGradient(
-                colors: [
-                  Color(0xFFF2F2F7),
-                  Color(0xFFFFFFFF),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                stops: [0.0, 1.0],
-              ),
-        ),
         child: SafeArea(
           child: RefreshIndicator(
             onRefresh: _loadLeaderboard,
@@ -351,7 +349,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Top 10 Feniks Poeni',
+                      'Top 3 Feniks Poeni',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
@@ -360,7 +358,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                       ),
                     ),
                     Text(
-                      'Najbolji slušaoci ovog mjeseca',
+                      'Najbolji slušaoci svih vremena',
                       style: TextStyle(
                         fontSize: 14,
                         color: isDarkMode ? AppTheme.textSecondary : const Color(0xFF8E8E93),
@@ -369,17 +367,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Top 10 slušalaca objavljuje se na kraju mjeseca.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDarkMode ? AppTheme.textMuted : const Color(0xFF8E8E93),
-                        fontWeight: FontWeight.w400,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Ljestvica će biti ažurirana u sljedećem ažuriranju.',
+                      'Poredak po ukupnim Feniks poenima: $kListeningPointsPerBlock poena za svaki minut slušanja + poeni od znački.',
                       style: TextStyle(
                         fontSize: 12,
                         color: isDarkMode ? AppTheme.textMuted : const Color(0xFF8E8E93),
@@ -426,10 +414,14 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
           else ...[
             if (_leaderboard.length >= 3) _buildTopThreePodium(),
             if (_leaderboard.length > 3) const SizedBox(height: 24),
+            // With fewer than 3 users there is no podium, so list everyone.
             ...List.generate(
-              _leaderboard.length > 3 ? _leaderboard.length - 3 : 0,
+              _leaderboard.length >= 3
+                  ? _leaderboard.length - 3
+                  : _leaderboard.length,
               (index) {
-                final user = _leaderboard[index + 3];
+                final user = _leaderboard[
+                    _leaderboard.length >= 3 ? index + 3 : index];
                 final auth = context.read<AuthService>();
                 final isCurrentUser = auth.isAuthenticated &&
                     auth.user != null &&
@@ -471,18 +463,24 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
           ),
           child: Center(
             child: Text(
-              _avatars[(place - 1) % _avatars.length],
-              style: const TextStyle(fontSize: 24),
+              _initial(user),
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: place == 2 ? const Color(0xFF8E8E93) : color,
+              ),
             ),
           ),
         ),
         const SizedBox(height: 8),
         Text(
           ((user['name'] as String?) ?? 'Anonim').split(' ').first,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF1D1D1F),
+            color: context.read<ThemeProvider>().isDarkMode
+                ? AppTheme.textPrimary
+                : const Color(0xFF1D1D1F),
           ),
           textAlign: TextAlign.center,
         ),
@@ -580,8 +578,12 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
             ),
             child: Center(
               child: Text(
-                _avatars[(((user['rank'] as int?) ?? 1) - 1) % _avatars.length],
-                style: const TextStyle(fontSize: 20),
+                _initial(user),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.primary,
+                ),
               ),
             ),
           ),

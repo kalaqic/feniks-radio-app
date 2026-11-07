@@ -99,6 +99,12 @@ class _WelcomePageState extends State<WelcomePage> {
           try {
             await FirestoreService.instance.createOrUpdateUser(uid, name, email: email);
           } on UsernameTakenException {
+            // Someone took the name in the meantime: remove the new account
+            // so it does not stay half-created.
+            try {
+              await authService.user?.delete();
+            } catch (_) {}
+            await authService.signOut();
             if (mounted) _showError('Korisničko ime je već zauzeto.');
             return;
           }
@@ -304,12 +310,16 @@ class _WelcomePageState extends State<WelcomePage> {
               autocorrect: false,
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_]')),
+                LengthLimitingTextInputFormatter(20),
               ],
               decoration: _loginStyleDecoration('Korisničko ime'),
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Molimo unesite korisničko ime';
                 if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(v)) {
                   return 'Samo slova, brojeve i _ (bez razmaka ili specijalnih znakova)';
+                }
+                if (v.trim().length < 3) {
+                  return 'Korisničko ime mora imati najmanje 3 karaktera';
                 }
                 return null;
               },

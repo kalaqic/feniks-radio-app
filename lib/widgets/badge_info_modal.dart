@@ -55,7 +55,7 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
       child: ScaleTransition(
         scale: _scaleAnimation,
         child: Container(
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [AppTheme.primary, AppTheme.primaryDark, AppTheme.accentDark],
@@ -71,7 +71,9 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
               ),
             ],
           ),
-          child: Column(
+          // Scrollable so the content fits on smaller screens.
+          child: SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               // Header with icon
@@ -123,11 +125,11 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
               const SizedBox(height: 24),
               
               // Achievement examples
-              _buildAchievementExample('⏰', 'Prvi Sat', 'Slušaj više od sata vremena', 50, isDarkMode),
+              _buildAchievementExample('⏰', 'Prvi Sat', 'Slušaj 1 sat u jednom danu', 50, isDarkMode),
               const SizedBox(height: 12),
-              _buildAchievementExample('🏆', 'Mjesečni Prvak', 'Završi prvi na ljestvici', 500, isDarkMode),
+              _buildAchievementExample('📆', 'Sedmica Zaredom', 'Slušaj Feniks Radio 7 dana zaredom', 150, isDarkMode),
               const SizedBox(height: 12),
-              _buildAchievementExample('💝', 'Ljubitelj Muzike', 'Dodaj 10 pjesama u omiljene', 150, isDarkMode),
+              _buildAchievementExample('💝', 'Ljubitelj Muzike', 'Imaj 10 pjesama u omiljenim', 100, isDarkMode),
               const SizedBox(height: 24),
               
               // Tips section
@@ -164,7 +166,7 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '• Značke se automatski dodjeljuju kada ispunite uslove\n• Svaka značka donosi bodove koji su prikazani uz nju\n• Što je izazov duži i teži, nagrada u bodovima je veća',
+                      '• Značke se automatski dodjeljuju kada ispunite uslove\n• Svaka značka donosi bodove koji su prikazani uz nju\n• Za svaki minut slušanja dobijate 2 boda\n• Što je izazov duži i teži, nagrada u bodovima je veća',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.white.withValues(alpha: 0.95),
@@ -210,6 +212,7 @@ class _BadgeInfoModalState extends State<BadgeInfoModal>
                 ),
               ),
             ],
+          ),
           ),
         ),
       ),

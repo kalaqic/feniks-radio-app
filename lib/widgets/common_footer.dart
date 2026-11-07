@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
-import '../models/radio_player_model.dart';
 import 'footer_button.dart';
 
 class CommonFooter extends StatelessWidget {
@@ -15,9 +13,8 @@ class CommonFooter extends StatelessWidget {
     return Container(
       height: 105,
       decoration: BoxDecoration(
-        color: isDark 
-          ? Colors.black.withValues(alpha: 0.8)
-          : Colors.white.withValues(alpha: 0.95),
+        // Solid, so the background circles never show through the footer.
+        color: isDark ? const Color(0xFF0B0B0F) : Colors.white,
         border: Border(
           top: BorderSide(
             color: isDark 
@@ -40,20 +37,18 @@ class CommonFooter extends StatelessWidget {
                 isDark: isDark,
                 onTap: () {
                   if (currentRoute != '/home') {
-                    context.read<RadioPlayerModel>().trackPageVisit('/home');
                     Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
                   }
                 },
               ),
               FooterButton(
-                icon: Icons.message_outlined,
-                label: 'Muzička želja',
-                isActive: currentRoute == '/ether-messages',
+                icon: Icons.leaderboard_rounded,
+                label: 'Ljestvica',
+                isActive: currentRoute == '/leaderboard',
                 isDark: isDark,
                 onTap: () {
-                  if (currentRoute != '/ether-messages') {
-                    context.read<RadioPlayerModel>().trackPageVisit('/ether-messages');
-                    Navigator.pushNamed(context, '/ether-messages');
+                  if (currentRoute != '/leaderboard') {
+                    Navigator.pushNamed(context, '/leaderboard');
                   }
                 },
               ),
@@ -64,7 +59,6 @@ class CommonFooter extends StatelessWidget {
                 isDark: isDark,
                 onTap: () {
                   if (currentRoute != '/profile') {
-                    context.read<RadioPlayerModel>().trackPageVisit('/profile');
                     Navigator.pushNamed(context, '/profile');
                   }
                 },

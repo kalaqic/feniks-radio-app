@@ -108,7 +108,7 @@ class _BadgeEarnedModalState extends State<BadgeEarnedModal>
               ),
             ],
           ),
-          child: Column(
+          child: SingleChildScrollView(child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               // Celebration text
@@ -250,8 +250,10 @@ class _BadgeEarnedModalState extends State<BadgeEarnedModal>
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
                     onTap: () {
+                      // Grab the navigator first: onDismiss closes this dialog.
+                      final navigator = Navigator.of(context);
                       widget.onDismiss();
-                      Navigator.pushNamed(context, '/badges');
+                      navigator.pushNamed('/badges');
                     },
                     child: const Center(
                       child: Text(
@@ -302,7 +304,7 @@ class _BadgeEarnedModalState extends State<BadgeEarnedModal>
                 ),
               ),
             ],
-          ),
+          )),
         ),
       ),
     );

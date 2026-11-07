@@ -12,12 +12,10 @@ import 'pages/settings_page.dart';
 import 'pages/profile_page.dart';
 import 'pages/favorites_page.dart';
 import 'pages/badges_page.dart';
-import 'pages/ether_messages_page.dart';
-import 'pages/statistics_page.dart';
+import 'pages/leaderboard_page.dart';
 import 'pages/welcome_page.dart';
 import 'pages/login_page.dart';
 import 'widgets/loading_screen.dart';
-import 'widgets/app_background_layer.dart';
 import 'utils/page_transitions.dart';
 
 Future<void> main() async {
@@ -54,9 +52,7 @@ class FeniksApp extends StatelessWidget {
             }
             return Stack(
               children: [
-                const Positioned.fill(child: AppBackgroundLayer()),
                 Positioned.fill(child: child),
-                const Positioned.fill(child: AppBackgroundOverlay()),
               ],
             );
           },
@@ -77,7 +73,7 @@ class FeniksApp extends StatelessWidget {
                 );
               case '/leaderboard':
                 return createRoute(
-                  page: const EtherMessagesPage(),
+                  page: const LeaderboardPage(),
                   settings: settings,
                   transitionType: PageTransitionType.fade,
                 );
@@ -105,12 +101,6 @@ class FeniksApp extends StatelessWidget {
                   settings: settings,
                   transitionType: PageTransitionType.fade,
                 );
-              case '/ether-messages':
-                return createRoute(
-                  page: const EtherMessagesPage(),
-                  settings: settings,
-                  transitionType: PageTransitionType.fade,
-                );
               case '/login':
                 return createRoute(
                   page: const LoginPage(),
@@ -120,12 +110,6 @@ class FeniksApp extends StatelessWidget {
               case '/welcome':
                 return createRoute(
                   page: const WelcomePage(),
-                  settings: settings,
-                  transitionType: PageTransitionType.fade,
-                );
-              case '/statistics':
-                return createRoute(
-                  page: const StatisticsPage(),
                   settings: settings,
                   transitionType: PageTransitionType.fade,
                 );

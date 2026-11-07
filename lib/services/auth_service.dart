@@ -62,7 +62,7 @@ class AuthService extends ChangeNotifier {
       return false;
     } catch (e) {
       _isLoading = false;
-      _errorMessage = 'An unexpected error occurred. Please try again.';
+      _errorMessage = 'Došlo je do greške. Pokušajte ponovo.';
       notifyListeners();
       return false;
     }
@@ -103,7 +103,7 @@ class AuthService extends ChangeNotifier {
       return false;
     } catch (e) {
       _isLoading = false;
-      _errorMessage = 'An unexpected error occurred. Please try again.';
+      _errorMessage = 'Došlo je do greške. Pokušajte ponovo.';
       notifyListeners();
       return false;
     }
@@ -116,7 +116,36 @@ class AuthService extends ChangeNotifier {
       _user = null;
       notifyListeners();
     } catch (e) {
-      _errorMessage = 'Error signing out. Please try again.';
+      _errorMessage = 'Greška pri odjavi. Pokušajte ponovo.';
+      notifyListeners();
+    }
+  }
+
+  /// Permanently deletes the account after confirming the password.
+  /// Returns null on success, otherwise a message for the user.
+  Future<String?> deleteAccount(String password) async {
+    final user = _auth.currentUser;
+    final email = user?.email;
+    if (user == null || email == null) return 'Niste prijavljeni.';
+    try {
+      _isLoading = true;
+      notifyListeners();
+      await user.reauthenticateWithCredential(
+        EmailAuthProvider.credential(email: email, password: password),
+      );
+      await FirestoreService.instance.deleteUserData(
+        user.uid,
+        displayName: user.displayName,
+      );
+      await user.delete();
+      _user = null;
+      return null;
+    } on FirebaseAuthException catch (e) {
+      return _getErrorMessage(e.code);
+    } catch (_) {
+      return 'Brisanje naloga nije uspjelo. Pokušajte ponovo.';
+    } finally {
+      _isLoading = false;
       notifyListeners();
     }
   }
@@ -140,7 +169,7 @@ class AuthService extends ChangeNotifier {
       return false;
     } catch (e) {
       _isLoading = false;
-      _errorMessage = 'An unexpected error occurred. Please try again.';
+      _errorMessage = 'Došlo je do greške. Pokušajte ponovo.';
       notifyListeners();
       return false;
     }
@@ -156,25 +185,26 @@ class AuthService extends ChangeNotifier {
   String _getErrorMessage(String code) {
     switch (code) {
       case 'weak-password':
-        return 'The password provided is too weak.';
+        return 'Lozinka je preslaba.';
       case 'email-already-in-use':
-        return 'An account already exists for that email.';
+        return 'Nalog sa ovim podacima već postoji.';
       case 'invalid-email':
-        return 'The email address is not valid.';
+        return 'Neispravni podaci za prijavu.';
       case 'user-disabled':
-        return 'This user account has been disabled.';
+        return 'Ovaj nalog je onemogućen.';
       case 'user-not-found':
-        return 'No user found for that email.';
       case 'wrong-password':
-        return 'Wrong password provided.';
+      case 'invalid-credential':
+      case 'INVALID_LOGIN_CREDENTIALS':
+        return 'Korisničko ime ili lozinka nisu ispravni.';
       case 'too-many-requests':
-        return 'Too many requests. Please try again later.';
+        return 'Previše pokušaja. Pokušajte ponovo malo kasnije.';
       case 'operation-not-allowed':
-        return 'Email/password accounts are not enabled.';
+        return 'Prijava trenutno nije omogućena.';
       case 'network-request-failed':
-        return 'Network error. Please check your connection.';
+        return 'Nema internet konekcije. Provjerite vezu i pokušajte ponovo.';
       default:
-        return 'An error occurred: $code';
+        return 'Došlo je do greške. Pokušajte ponovo.';
     }
   }
 }

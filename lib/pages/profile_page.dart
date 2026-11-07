@@ -24,6 +24,9 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     _loadDisplayEmail();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<RadioPlayerModel>().trackPageVisit('/profile');
+    });
   }
 
   @override
@@ -118,16 +121,6 @@ class _ProfilePageState extends State<ProfilePage> {
         elevation: isDarkMode ? 0 : null,
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: isDarkMode
-              ? AppTheme.backgroundGradient
-              : const LinearGradient(
-                  colors: [Color(0xFFF2F2F7), Color(0xFFFFFFFF)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  stops: [0.0, 1.0],
-                ),
-        ),
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
@@ -143,6 +136,21 @@ class _ProfilePageState extends State<ProfilePage> {
                   _buildPointsCard(context, model, isDarkMode),
                   const SizedBox(height: 32),
                   _buildLogoutButton(context, auth, isDarkMode),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: TextButton(
+                      onPressed: () => _confirmDeleteAccount(context, auth),
+                      child: Text(
+                        'Obriši nalog',
+                        style: TextStyle(
+                          color: isDarkMode
+                              ? AppTheme.textSecondary
+                              : Colors.grey.shade600,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ),
                 ] else ...[
                   Center(
                     child: Padding(
@@ -281,7 +289,6 @@ class _ProfilePageState extends State<ProfilePage> {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
                 onPressed: () {
-                  model.trackPageVisit('/settings');
                   Navigator.pushNamed(context, '/settings');
                 },
               ),
@@ -488,6 +495,81 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  Future<void> _confirmDeleteAccount(
+    BuildContext context,
+    AuthService auth,
+  ) async {
+    final passwordController = TextEditingController();
+    final password = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Obriši nalog'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Nalog, poeni, značke i omiljene pjesme biće trajno obrisani. '
+              'Ovo se ne može poništiti.\n\nZa potvrdu unesite lozinku:',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Lozinka'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Otkaži'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, passwordController.text),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Obriši zauvijek'),
+          ),
+        ],
+      ),
+    );
+    if (password == null || password.isEmpty || !context.mounted) return;
+
+    final model = context.read<RadioPlayerModel>();
+    // Stop saving progress so nothing re-creates the deleted data. If the
+    // deletion fails, the progress is simply loaded again from the server.
+    model.resetProgress();
+    await model.waitForPendingSync();
+    final error = await auth.deleteAccount(password);
+    if (error != null) {
+      // Not deleted: bring the saved progress back.
+      final uid = auth.user?.uid;
+      if (uid != null) {
+        try {
+          final data = await FirestoreService.instance.loadUserAchievements(
+            uid,
+          );
+          model.loadUserProgress(uid, data);
+        } catch (_) {}
+      }
+    }
+    if (!context.mounted) return;
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Nalog je obrisan.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    Navigator.pushNamedAndRemoveUntil(context, '/welcome', (route) => false);
+  }
+
   Widget _buildLogoutButton(BuildContext context, AuthService authService, bool isDarkMode) {
     return Container(
       width: double.infinity,
@@ -526,7 +608,16 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
             );
             if (confirmed == true && context.mounted) {
+              // Save the latest progress, then clear it so the next user
+              // on this phone starts clean.
+              final model = context.read<RadioPlayerModel>();
+              await model.syncNow().timeout(
+                const Duration(seconds: 5),
+                onTimeout: () {},
+              );
+              await model.waitForPendingSync();
               await authService.signOut();
+              model.resetProgress();
               if (context.mounted) {
                 Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
               }

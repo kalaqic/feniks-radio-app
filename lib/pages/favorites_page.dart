@@ -16,6 +16,14 @@ class FavoritesPage extends StatefulWidget {
 
 class _FavoritesPageState extends State<FavoritesPage> {
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<RadioPlayerModel>().trackPageVisit('/favorites');
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final model = context.watch<RadioPlayerModel>();
     final themeProvider = context.watch<ThemeProvider>();
@@ -43,19 +51,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
         ),
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: isDarkMode 
-            ? AppTheme.backgroundGradient
-            : const LinearGradient(
-                colors: [
-                  Color(0xFFF2F2F7),
-                  Color(0xFFFFFFFF),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                stops: [0.0, 1.0],
-              ),
-        ),
         child: SafeArea(
           child: favoriteSongs.isEmpty
               ? _buildEmptyState(isDarkMode)

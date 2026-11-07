@@ -83,7 +83,7 @@ class _CelebrationModalState extends State<CelebrationModal>
                     ),
                   ],
                 ),
-                child: Column(
+                child: SingleChildScrollView(child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Celebration Icon
@@ -232,7 +232,7 @@ class _CelebrationModalState extends State<CelebrationModal>
                       ),
                     ),
                   ],
-                ),
+                )),
               ),
             ),
           ),
