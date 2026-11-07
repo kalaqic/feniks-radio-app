@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
+import '../utils/log.dart';
 
 class MetadataService {
-  static const String streamUrl = 'https://c30.radioboss.fm:8234/stream';
-
   Timer? _metadataTimer;
   StreamController<Map<String, String>>? _metadataController;
 
@@ -67,9 +67,9 @@ class MetadataService {
   Future<Map<String, String>> _getIcyMetadata() async {
     final client = http.Client();
     try {
-      final request = http.Request('GET', Uri.parse(streamUrl));
+      final request = http.Request('GET', Uri.parse(AppConfig.streamUrl));
       request.headers['Icy-MetaData'] = '1';
-      request.headers['User-Agent'] = 'FeniksRadio/1.0';
+      request.headers['User-Agent'] = AppConfig.userAgent;
 
       final response = await client
           .send(request)
@@ -152,13 +152,12 @@ class MetadataService {
   Future<Map<String, String>> _getApiMetadata() async {
     try {
       // Use the correct JSON status endpoint
-      final endpoint = 'https://c30.radioboss.fm:8234/status-json.xsl';
 
       final response = await http
           .get(
-            Uri.parse(endpoint),
+            Uri.parse(AppConfig.nowPlayingUrl),
             headers: {
-              'User-Agent': 'FeniksRadio/1.0',
+              'User-Agent': AppConfig.userAgent,
               'Accept': 'application/json',
             },
           )
@@ -179,7 +178,9 @@ class MetadataService {
           }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      logError('Fetching song from the status endpoint', e);
+    }
     return {};
   }
 
@@ -274,7 +275,9 @@ class MetadataService {
           result['artist'] = artist ?? '';
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      logError('Parsing the status response', e);
+    }
 
     return result;
   }

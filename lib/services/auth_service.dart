@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+
+import '../utils/log.dart';
 import 'firestore_service.dart';
 
 class AuthService extends ChangeNotifier {
@@ -49,7 +51,9 @@ class AuthService extends ChangeNotifier {
             displayName: displayName,
             email: email,
           );
-        } catch (_) {}
+        } catch (e) {
+          logError('Saving user profile', e);
+        }
       }
 
       _isLoading = false;
@@ -91,7 +95,9 @@ class AuthService extends ChangeNotifier {
             displayName: _user!.displayName,
             email: _user!.email,
           );
-        } catch (_) {}
+        } catch (e) {
+          logError('Saving user profile', e);
+        }
       }
       _isLoading = false;
       notifyListeners();
@@ -208,4 +214,3 @@ class AuthService extends ChangeNotifier {
     }
   }
 }
-

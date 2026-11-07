@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/radio_player_model.dart';
+import '../utils/log.dart';
 
 class ThemeProvider extends ChangeNotifier {
   ThemeProvider() {
     _loadSavedTheme();
   }
+
+  static const _prefKey = 'settings.darkMode';
 
   bool _isDarkMode = false;
 
@@ -13,38 +15,48 @@ class ThemeProvider extends ChangeNotifier {
   Future<void> _loadSavedTheme() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final saved = prefs.getBool(RadioPlayerModel.kPrefDarkMode);
+      final saved = prefs.getBool(_prefKey);
       if (saved != null && saved != _isDarkMode) {
         _isDarkMode = saved;
         notifyListeners();
       }
-    } catch (_) {}
+    } catch (e) {
+      logError('Loading saved theme', e);
+    }
   }
-  
+
   bool get isDarkMode => _isDarkMode;
-  
+
   ThemeData get currentTheme => _isDarkMode ? darkTheme : lightTheme;
-  
+
+  /// Switches the theme and remembers the choice on the device.
   void toggleTheme(bool isDark) {
     _isDarkMode = isDark;
     notifyListeners();
+    SharedPreferences.getInstance()
+        .then((prefs) => prefs.setBool(_prefKey, isDark))
+        .catchError((Object e) {
+          logError('Saving theme', e);
+          return false;
+        });
   }
-  
+
   static final lightTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: const Color(0xFF007AFF),
-      brightness: Brightness.light,
-    ).copyWith(
-      primary: const Color(0xFF007AFF),
-      primaryContainer: const Color(0xFFE3F2FD),
-      secondary: const Color(0xFF5856D6),
-      secondaryContainer: const Color(0xFFF3F2FF),
-      surface: Colors.white,
-      surfaceContainerHighest: const Color(0xFFFAFAFA),
-      outline: const Color(0xFFE5E5E7),
-    ),
+    colorScheme:
+        ColorScheme.fromSeed(
+          seedColor: const Color(0xFF007AFF),
+          brightness: Brightness.light,
+        ).copyWith(
+          primary: const Color(0xFF007AFF),
+          primaryContainer: const Color(0xFFE3F2FD),
+          secondary: const Color(0xFF5856D6),
+          secondaryContainer: const Color(0xFFF3F2FF),
+          surface: Colors.white,
+          surfaceContainerHighest: const Color(0xFFFAFAFA),
+          outline: const Color(0xFFE5E5E7),
+        ),
     fontFamily: 'SF Pro Display',
     scaffoldBackgroundColor: const Color(0xFFF2F2F7),
     cardTheme: const CardThemeData(
@@ -68,24 +80,25 @@ class ThemeProvider extends ChangeNotifier {
       ),
     ),
   );
-  
+
   static final darkTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: const Color(0xFF007AFF),
-      brightness: Brightness.dark,
-    ).copyWith(
-      primary: const Color(0xFF0A84FF),
-      primaryContainer: const Color(0xFF1C1C1E),
-      secondary: const Color(0xFF5E5CE6),
-      secondaryContainer: const Color(0xFF1C1C1E),
-      surface: const Color(0xFF1C1C1E),
-      surfaceContainerHighest: const Color(0xFF2C2C2E),
-      outline: const Color(0xFF38383A),
-      onSurface: Colors.white,
-      onPrimary: Colors.white,
-    ),
+    colorScheme:
+        ColorScheme.fromSeed(
+          seedColor: const Color(0xFF007AFF),
+          brightness: Brightness.dark,
+        ).copyWith(
+          primary: const Color(0xFF0A84FF),
+          primaryContainer: const Color(0xFF1C1C1E),
+          secondary: const Color(0xFF5E5CE6),
+          secondaryContainer: const Color(0xFF1C1C1E),
+          surface: const Color(0xFF1C1C1E),
+          surfaceContainerHighest: const Color(0xFF2C2C2E),
+          outline: const Color(0xFF38383A),
+          onSurface: Colors.white,
+          onPrimary: Colors.white,
+        ),
     fontFamily: 'SF Pro Display',
     scaffoldBackgroundColor: const Color(0xFF000000),
     cardTheme: const CardThemeData(

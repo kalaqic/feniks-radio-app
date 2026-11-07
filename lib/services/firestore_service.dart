@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../models/leaderboard_entry.dart';
+
 class UsernameTakenException implements Exception {
   UsernameTakenException();
 }
@@ -117,24 +119,15 @@ class FirestoreService {
   }
 
   /// Top [limit] users by points descending.
-  Future<List<Map<String, dynamic>>> getLeaderboardTop({int limit = 3}) async {
-    final q = await _leaderboard
+  Future<List<LeaderboardEntry>> getLeaderboardTop({int limit = 3}) async {
+    final query = await _leaderboard
         .orderBy('points', descending: true)
         .limit(limit)
         .get();
-    final list = <Map<String, dynamic>>[];
-    for (var i = 0; i < q.docs.length; i++) {
-      final d = q.docs[i];
-      final data = d.data();
-      list.add({
-        'uid': d.id,
-        'name': data['displayName'] as String? ?? 'Anonim',
-        'points': (data['points'] as num?)?.toInt() ?? 0,
-        'badges': (data['badgeCount'] as num?)?.toInt() ?? 0,
-        'rank': i + 1,
-      });
-    }
-    return list;
+    return [
+      for (final (index, doc) in query.docs.indexed)
+        LeaderboardEntry.fromFirestore(doc.id, doc.data(), rank: index + 1),
+    ];
   }
 
   /// All-time rank of the current user (1-based), based on total points.

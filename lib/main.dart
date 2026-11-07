@@ -1,27 +1,28 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:timezone/data/latest.dart' as tz;
-import 'package:firebase_core/firebase_core.dart';
+import 'config/app_config.dart';
+import 'config/routes.dart';
 import 'firebase_options.dart';
-import 'theme/theme_provider.dart';
 import 'models/radio_player_model.dart';
-import 'services/notification_service.dart';
-import 'services/auth_service.dart';
-import 'pages/home_page.dart';
-import 'pages/settings_page.dart';
-import 'pages/profile_page.dart';
-import 'pages/favorites_page.dart';
 import 'pages/badges_page.dart';
+import 'pages/favorites_page.dart';
+import 'pages/home_page.dart';
 import 'pages/leaderboard_page.dart';
-import 'pages/welcome_page.dart';
 import 'pages/login_page.dart';
-import 'widgets/loading_screen.dart';
+import 'pages/profile_page.dart';
+import 'pages/settings_page.dart';
+import 'pages/welcome_page.dart';
+import 'services/auth_service.dart';
+import 'services/notification_service.dart';
+import 'theme/theme_provider.dart';
 import 'utils/page_transitions.dart';
+import 'widgets/loading_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   tz.initializeTimeZones();
@@ -42,87 +43,41 @@ class FeniksApp extends StatelessWidget {
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) => MaterialApp(
-          title: 'Feniks Radio',
+          title: AppConfig.appName,
           debugShowCheckedModeBanner: false,
           navigatorKey: navigatorKey,
           theme: themeProvider.currentTheme,
-          builder: (context, child) {
-            if (child == null) {
-              return const SizedBox.shrink();
-            }
-            return Stack(
-              children: [
-                Positioned.fill(child: child),
-              ],
-            );
-          },
-          initialRoute: '/',
-          onGenerateRoute: (RouteSettings settings) {
-            switch (settings.name) {
-              case '/':
-                return createRoute(
-                  page: const LoadingScreen(),
-                  settings: settings,
-                  transitionType: PageTransitionType.fade,
-                );
-              case '/home':
-                return createRoute(
-                  page: const HomePage(),
-                  settings: settings,
-                  transitionType: PageTransitionType.fade,
-                );
-              case '/leaderboard':
-                return createRoute(
-                  page: const LeaderboardPage(),
-                  settings: settings,
-                  transitionType: PageTransitionType.fade,
-                );
-              case '/settings':
-                return createRoute(
-                  page: const SettingsPage(),
-                  settings: settings,
-                  transitionType: PageTransitionType.fade,
-                );
-              case '/profile':
-                return createRoute(
-                  page: const ProfilePage(),
-                  settings: settings,
-                  transitionType: PageTransitionType.fade,
-                );
-              case '/favorites':
-                return createRoute(
-                  page: const FavoritesPage(),
-                  settings: settings,
-                  transitionType: PageTransitionType.fade,
-                );
-              case '/badges':
-                return createRoute(
-                  page: const BadgesPage(),
-                  settings: settings,
-                  transitionType: PageTransitionType.fade,
-                );
-              case '/login':
-                return createRoute(
-                  page: const LoginPage(),
-                  settings: settings,
-                  transitionType: PageTransitionType.fade,
-                );
-              case '/welcome':
-                return createRoute(
-                  page: const WelcomePage(),
-                  settings: settings,
-                  transitionType: PageTransitionType.fade,
-                );
-              default:
-                return createRoute(
-                  page: const HomePage(),
-                  settings: settings,
-                  transitionType: PageTransitionType.fade,
-                );
-            }
-          },
+          initialRoute: Routes.loading,
+          onGenerateRoute: (settings) => FadePageRoute<void>(
+            page: _pageFor(settings.name),
+            settings: settings,
+          ),
         ),
       ),
     );
+  }
+}
+
+/// Page for a named route; unknown routes open the home page.
+Widget _pageFor(String? routeName) {
+  switch (routeName) {
+    case Routes.loading:
+      return const LoadingScreen();
+    case Routes.welcome:
+      return const WelcomePage();
+    case Routes.login:
+      return const LoginPage();
+    case Routes.leaderboard:
+      return const LeaderboardPage();
+    case Routes.badges:
+      return const BadgesPage();
+    case Routes.favorites:
+      return const FavoritesPage();
+    case Routes.profile:
+      return const ProfilePage();
+    case Routes.settings:
+      return const SettingsPage();
+    default: // Routes.home and anything unknown
+      return const HomePage();
   }
 }

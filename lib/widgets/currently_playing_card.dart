@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../theme/app_theme.dart';
-import '../theme/theme_provider.dart';
+
+import '../config/routes.dart';
 import '../models/radio_player_model.dart';
 import '../services/auth_service.dart';
-import '../widgets/login_required_dialog.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
+import '../theme/theme_provider.dart';
 import '../utils/text_formatting.dart';
+import '../widgets/login_required_dialog.dart';
 
 String _formatDuration(Duration d) {
   final hours = d.inHours;
@@ -35,12 +38,9 @@ class CurrentlyPlayingCard extends StatelessWidget {
         );
         final title = formattedInfo['title'] ?? model.currentSong;
         final artist = formattedInfo['artist'] ?? model.currentArtist;
-        final isFallbackMetadata =
-            title.trim() == 'Feniks Radio' &&
-            artist.trim() == 'Samo dobre vijesti!';
         final showFetchingHint =
             !model.playing &&
-            (model.isFetchingCurrentSong || isFallbackMetadata);
+            (model.isFetchingCurrentSong || model.isFallbackSong);
 
         return AnimatedContainer(
           duration: const Duration(milliseconds: 300),
@@ -65,7 +65,7 @@ class CurrentlyPlayingCard extends StatelessWidget {
                   Container(
                     width: 32,
                     height: 32,
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       gradient: AppTheme.primaryGradient,
                       shape: BoxShape.circle,
                     ),
@@ -132,9 +132,7 @@ class CurrentlyPlayingCard extends StatelessWidget {
                     Icon(
                       Icons.timer_outlined,
                       size: 16,
-                      color: isDarkMode
-                          ? AppTheme.textSecondary
-                          : const Color(0xFF6D6D70),
+                      color: AppColors.of(isDarkMode).secondaryText,
                     ),
                     const SizedBox(width: 6),
                     Text(
@@ -153,9 +151,7 @@ class CurrentlyPlayingCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: isDarkMode
-                            ? AppTheme.textSecondary
-                            : const Color(0xFF6D6D70),
+                        color: AppColors.of(isDarkMode).secondaryText,
                       ),
                     ),
                   ],
@@ -176,9 +172,7 @@ class CurrentlyPlayingCard extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: isDarkMode
-                                ? AppTheme.textPrimary
-                                : const Color(0xFF1D1D1F),
+                            color: AppColors.of(isDarkMode).primaryText,
                             letterSpacing: -0.3,
                           ),
                           maxLines: 2,
@@ -191,9 +185,7 @@ class CurrentlyPlayingCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
-                              color: isDarkMode
-                                  ? AppTheme.textSecondary
-                                  : const Color(0xFF6D6D70),
+                              color: AppColors.of(isDarkMode).secondaryText,
                               letterSpacing: -0.1,
                             ),
                           ),
@@ -204,9 +196,7 @@ class CurrentlyPlayingCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
-                              color: isDarkMode
-                                  ? AppTheme.textSecondary
-                                  : const Color(0xFF6D6D70),
+                              color: AppColors.of(isDarkMode).secondaryText,
                               letterSpacing: -0.1,
                             ),
                             maxLines: 1,
@@ -311,9 +301,7 @@ class CurrentlyPlayingCard extends StatelessWidget {
                                 color:
                                     model.isFavorite(model.currentSongDisplay)
                                     ? Colors.white
-                                    : isDarkMode
-                                    ? AppTheme.textSecondary
-                                    : const Color(0xFF6D6D70),
+                                    : AppColors.of(isDarkMode).secondaryText,
                                 size: 16,
                               ),
                               const SizedBox(width: 6),
@@ -357,7 +345,7 @@ class CurrentlyPlayingCard extends StatelessWidget {
                   child: InkWell(
                     borderRadius: BorderRadius.circular(10),
                     onTap: () {
-                      Navigator.pushNamed(context, '/favorites');
+                      Navigator.pushNamed(context, Routes.favorites);
                     },
                     child: const Padding(
                       padding: EdgeInsets.symmetric(
@@ -395,4 +383,3 @@ class CurrentlyPlayingCard extends StatelessWidget {
     );
   }
 }
-

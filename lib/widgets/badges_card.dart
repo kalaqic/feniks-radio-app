@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../theme/app_theme.dart';
+
+import '../config/routes.dart';
 import '../models/radio_player_model.dart';
+import '../theme/app_theme.dart';
 
 class BadgesCard extends StatelessWidget {
   const BadgesCard({super.key});
@@ -9,9 +11,11 @@ class BadgesCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final model = context.watch<RadioPlayerModel>();
-    final earnedBadges = model.earnedBadges;
-    final totalBadges = model.allBadges.length;
-    final percentage = totalBadges > 0 ? (earnedBadges.length / totalBadges * 100).round() : 0;
+    final earned = model.earnedAchievements;
+    final totalBadges = model.allAchievements.length;
+    final percentage = totalBadges > 0
+        ? (earned.length / totalBadges * 100).round()
+        : 0;
 
     return Container(
       width: double.infinity,
@@ -36,7 +40,7 @@ class BadgesCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
           onTap: () {
-            Navigator.pushNamed(context, '/badges');
+            Navigator.pushNamed(context, Routes.badges);
           },
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -70,7 +74,7 @@ class BadgesCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          '${earnedBadges.length} od $totalBadges osvojeno',
+                          '${earned.length} od $totalBadges osvojeno',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
@@ -91,7 +95,7 @@ class BadgesCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
-              
+
               // Progress bar
               LinearProgressIndicator(
                 value: percentage / 100,
@@ -101,9 +105,9 @@ class BadgesCard extends StatelessWidget {
                 minHeight: 6,
               ),
               const SizedBox(height: 12),
-              
+
               // Recent badges preview
-              if (earnedBadges.isNotEmpty) ...[
+              if (earned.isNotEmpty) ...[
                 Row(
                   children: [
                     const Text(
@@ -117,23 +121,26 @@ class BadgesCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Row(
-                        children: earnedBadges
+                        // The three most recently unlocked
+                        children: earned.reversed
                             .take(3)
-                            .map((badge) => Container(
-                                  margin: const EdgeInsets.only(right: 6),
-                                  width: 24,
-                                  height: 24,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.2),
-                                    shape: BoxShape.circle,
+                            .map(
+                              (e) => Container(
+                                margin: const EdgeInsets.only(right: 6),
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    e.achievement.icon,
+                                    style: const TextStyle(fontSize: 12),
                                   ),
-                                  child: Center(
-                                    child: Text(
-                                      badge['icon'] as String,
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  ),
-                                ))
+                                ),
+                              ),
+                            )
                             .toList(),
                       ),
                     ),

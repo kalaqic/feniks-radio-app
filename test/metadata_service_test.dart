@@ -1,5 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:feniksflutter/services/metadata_service.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('MetadataService Tests', () {

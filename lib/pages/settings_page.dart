@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../config/app_config.dart';
+import '../config/routes.dart';
+import '../models/radio_player_model.dart';
+import '../services/notification_service.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
-import '../services/notification_service.dart';
-import '../models/radio_player_model.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -14,17 +18,15 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  /// Current theme; the page rebuilds when it changes.
+  bool get _isDarkMode => context.watch<ThemeProvider>().isDarkMode;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final model = context.read<RadioPlayerModel>();
-      final themeProvider = context.read<ThemeProvider>();
-      model.trackPageVisit('/settings');
-      
-      if (model.isDarkMode != themeProvider.isDarkMode) {
-        themeProvider.toggleTheme(model.isDarkMode);
+      if (mounted) {
+        context.read<RadioPlayerModel>().trackPageVisit(Routes.settings);
       }
     });
   }
@@ -33,7 +35,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final model = context.watch<RadioPlayerModel>();
     final themeProvider = context.watch<ThemeProvider>();
-    
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
@@ -41,115 +43,118 @@ class _SettingsPageState extends State<SettingsPage> {
         leading: IconButton(
           padding: const EdgeInsets.only(left: 12),
           constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-          icon: Icon(
-            Icons.chevron_left_rounded,
-            color: model.isDarkMode ? Colors.white : null,
-            size: 28,
-          ),
-          onPressed: () {
-            Navigator.pushNamedAndRemoveUntil(context, '/profile', (route) => false);
-          },
+          icon: const Icon(Icons.chevron_left_rounded, size: 28),
+          // Settings is opened from the profile, so going back returns there.
+          onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          'Postavke',
-          style: TextStyle(
-            color: model.isDarkMode ? Colors.white : null,
-          ),
-        ),
-        backgroundColor: model.isDarkMode ? Colors.transparent : null,
-        elevation: model.isDarkMode ? 0 : null,
+        title: const Text('Postavke'),
       ),
-      body: Container(
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 20),
-                
-                // Appearance Section
-                _buildSettingSection(
-                  title: 'Izgled',
-                  icon: Icons.palette_outlined,
-                  iconColors: [AppTheme.primary, AppTheme.primaryDark],
-                  children: [
-                    _buildToggleSetting(
-                      'Tamni režim',
-                      'Aktiviraj tamnu temu za lakše korišćenje noću',
-                      Icons.dark_mode_outlined,
-                      model.isDarkMode,
-                      (value) {
-                        model.isDarkMode = value;
-                        themeProvider.toggleTheme(value);
-                      },
-                    ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 20),
+
+              // Appearance Section
+              _buildSettingSection(
+                title: 'Izgled',
+                icon: Icons.palette_outlined,
+                iconColors: [AppTheme.primary, AppTheme.primaryDark],
+                children: [
+                  _buildToggleSetting(
+                    'Tamni režim',
+                    'Aktiviraj tamnu temu za lakše korišćenje noću',
+                    Icons.dark_mode_outlined,
+                    _isDarkMode,
+                    themeProvider.toggleTheme,
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              // Notifications Section
+              _buildSettingSection(
+                title: 'Notifikacije',
+                icon: Icons.notifications_outlined,
+                iconColors: [const Color(0xFF6366F1), const Color(0xFF8B5CF6)],
+                children: [
+                  _buildToggleSetting(
+                    'Omogući notifikacije',
+                    'Dobij podsjetnik da se uključiš u program i slušaš uživo',
+                    Icons.notifications_active_outlined,
+                    model.notificationsEnabled,
+                    (value) => _setNotificationsEnabled(model, value),
+                  ),
+                  if (model.notificationsEnabled) ...[
+                    const SizedBox(height: 16),
+                    _buildNotificationTimePicker(model),
                   ],
-                ),
-                
-                const SizedBox(height: 20),
-                
-                // Notifications Section
-                _buildSettingSection(
-                  title: 'Notifikacije',
-                  icon: Icons.notifications_outlined,
-                  iconColors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                  children: [
-                    _buildToggleSetting(
-                      'Omogući notifikacije',
-                      'Dobij podsjetnik da se uključiš u program i slušaš uživo',
-                      Icons.notifications_active_outlined,
-                      model.notificationsEnabled,
-                      (value) => _setNotificationsEnabled(model, value),
-                    ),
-                    if (model.notificationsEnabled) ...[
-                      const SizedBox(height: 16),
-                      _buildNotificationTimePicker(model),
-                    ],
-                  ],
-                ),
-                
-                const SizedBox(height: 20),
-                
-                // Audio Section
-                _buildSettingSection(
-                  title: 'Audio',
-                  icon: Icons.volume_up_outlined,
-                  iconColors: [Color(0xFF10B981), Color(0xFF059669)],
-                  children: [
-                    _buildToggleSetting(
-                      'Automatsko puštanje',
-                      'Počni reprodukciju čim se otvori aplikacija',
-                      Icons.play_circle_outline,
-                      model.autoPlay,
-                      (value) => model.autoPlay = value,
-                    ),
-                  ],
-                ),
-                
-                const SizedBox(height: 20),
-                
-                // About Section
-                _buildSettingSection(
-                  title: 'O aplikaciji',
-                  icon: Icons.info_outline,
-                  iconColors: [Color(0xFF8E8E93), Color(0xFFA8A8A8)],
-                  children: [
-                    _buildInfoSetting('Verzija', '1.0.0', Icons.system_update_outlined, null),
-                    const SizedBox(height: 12),
-                    _buildInfoSetting('Podrška', 'feniks.radio94.7@gmail.com', Icons.email_outlined, () => _openEmailSupport()),
-                    const SizedBox(height: 12),
-                    _buildInfoSetting('Ostavi feedback', 'Predloži ideju', Icons.lightbulb_outline, () => _openFeedbackEmail()),
-                    const SizedBox(height: 12),
-                    _buildInfoSetting('Uslovi korišćenja', 'Prikaži', Icons.description_outlined, () => _showTermsOfService()),
-                  ],
-                ),
-                
-                const SizedBox(height: 24),
-                _buildBackToProfileButton(model.isDarkMode),
-                const SizedBox(height: 40),
-              ],
-            ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              // Audio Section
+              _buildSettingSection(
+                title: 'Audio',
+                icon: Icons.volume_up_outlined,
+                iconColors: [const Color(0xFF10B981), const Color(0xFF059669)],
+                children: [
+                  _buildToggleSetting(
+                    'Automatsko puštanje',
+                    'Počni reprodukciju čim se otvori aplikacija',
+                    Icons.play_circle_outline,
+                    model.autoPlay,
+                    (value) => model.autoPlay = value,
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              // About Section
+              _buildSettingSection(
+                title: 'O aplikaciji',
+                icon: Icons.info_outline,
+                iconColors: [const Color(0xFF8E8E93), const Color(0xFFA8A8A8)],
+                children: [
+                  _buildInfoSetting(
+                    'Verzija',
+                    AppConfig.appVersion,
+                    Icons.system_update_outlined,
+                    null,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildInfoSetting(
+                    'Podrška',
+                    AppConfig.supportEmail,
+                    Icons.email_outlined,
+                    _openEmailSupport,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildInfoSetting(
+                    'Ostavi feedback',
+                    'Predloži ideju',
+                    Icons.lightbulb_outline,
+                    _openFeedbackEmail,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildInfoSetting(
+                    'Uslovi korišćenja',
+                    'Prikaži',
+                    Icons.description_outlined,
+                    _showTermsOfService,
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+              _buildBackToProfileButton(_isDarkMode),
+              const SizedBox(height: 40),
+            ],
           ),
         ),
       ),
@@ -190,11 +195,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   gradient: LinearGradient(colors: iconColors),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  icon,
-                  color: Colors.white,
-                  size: 18,
-                ),
+                child: Icon(icon, color: Colors.white, size: 18),
               ),
               const SizedBox(width: 12),
               Text(
@@ -226,15 +227,15 @@ class _SettingsPageState extends State<SettingsPage> {
         Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: value 
-                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1) 
+            color: value
+                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
                 : Theme.of(context).colorScheme.surfaceContainerHighest,
             shape: BoxShape.circle,
           ),
           child: Icon(
             icon,
-            color: value 
-                ? Theme.of(context).colorScheme.primary 
+            color: value
+                ? Theme.of(context).colorScheme.primary
                 : Theme.of(context).colorScheme.outline,
             size: 16,
           ),
@@ -257,7 +258,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 subtitle,
                 style: TextStyle(
                   fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
             ],
@@ -272,8 +275,12 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-
-  Widget _buildInfoSetting(String title, String value, IconData icon, VoidCallback? onTap) {
+  Widget _buildInfoSetting(
+    String title,
+    String value,
+    IconData icon,
+    VoidCallback? onTap,
+  ) {
     return GestureDetector(
       onTap: onTap,
       child: Row(
@@ -305,7 +312,9 @@ class _SettingsPageState extends State<SettingsPage> {
             value,
             style: TextStyle(
               fontSize: 12,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
           const SizedBox(width: 8),
@@ -323,11 +332,9 @@ class _SettingsPageState extends State<SettingsPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: model.isDarkMode ? AppTheme.cardBackground : Colors.grey.shade50,
+        color: AppColors.of(_isDarkMode).surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: model.isDarkMode ? AppTheme.cardBorder : Colors.grey.shade200,
-        ),
+        border: Border.all(color: AppColors.of(_isDarkMode).border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -336,7 +343,7 @@ class _SettingsPageState extends State<SettingsPage> {
             'Vrijeme dnevne notifikacije',
             style: TextStyle(
               fontSize: 12,
-              color: model.isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600,
+              color: AppColors.of(_isDarkMode).secondaryText,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -349,10 +356,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: model.isDarkMode ? AppTheme.backgroundMedium : Colors.white,
+                      color: AppColors.of(_isDarkMode).inputFill,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: model.isDarkMode ? AppTheme.cardBorder : Colors.grey.shade200,
+                        color: AppColors.of(_isDarkMode).border,
                       ),
                     ),
                     child: Column(
@@ -360,7 +367,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         Text(
                           'Sat',
                           style: TextStyle(
-                            color: model.isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600,
+                            color: AppColors.of(_isDarkMode).secondaryText,
                             fontSize: 10,
                             fontWeight: FontWeight.w500,
                           ),
@@ -371,7 +378,9 @@ class _SettingsPageState extends State<SettingsPage> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: model.isDarkMode ? AppTheme.primary : const Color(0xFF6366F1),
+                            color: _isDarkMode
+                                ? AppTheme.primary
+                                : const Color(0xFF6366F1),
                           ),
                         ),
                       ],
@@ -385,7 +394,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: model.isDarkMode ? AppTheme.primary : const Color(0xFF6366F1),
+                  color: _isDarkMode
+                      ? AppTheme.primary
+                      : const Color(0xFF6366F1),
                 ),
               ),
               const SizedBox(width: 8),
@@ -395,10 +406,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: model.isDarkMode ? AppTheme.backgroundMedium : Colors.white,
+                      color: AppColors.of(_isDarkMode).inputFill,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: model.isDarkMode ? AppTheme.cardBorder : Colors.grey.shade200,
+                        color: AppColors.of(_isDarkMode).border,
                       ),
                     ),
                     child: Column(
@@ -406,7 +417,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         Text(
                           'Minuta',
                           style: TextStyle(
-                            color: model.isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600,
+                            color: AppColors.of(_isDarkMode).secondaryText,
                             fontSize: 10,
                             fontWeight: FontWeight.w500,
                           ),
@@ -417,7 +428,9 @@ class _SettingsPageState extends State<SettingsPage> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: model.isDarkMode ? AppTheme.primary : const Color(0xFF6366F1),
+                            color: _isDarkMode
+                                ? AppTheme.primary
+                                : const Color(0xFF6366F1),
                           ),
                         ),
                       ],
@@ -472,11 +485,11 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
-  
+
   void _showHourPicker(RadioPlayerModel model) {
     showModalBottomSheet(
       context: context,
-      builder: (context) => Container(
+      builder: (context) => SizedBox(
         height: 200,
         child: Column(
           children: [
@@ -484,10 +497,7 @@ class _SettingsPageState extends State<SettingsPage> {
               padding: const EdgeInsets.all(16),
               child: const Text(
                 'Izaberi sat',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
             ),
             Expanded(
@@ -500,7 +510,10 @@ class _SettingsPageState extends State<SettingsPage> {
                       textAlign: TextAlign.center,
                     ),
                     onTap: () {
-                      model.setNotificationTime(index, model.notificationMinute);
+                      model.setNotificationTime(
+                        index,
+                        model.notificationMinute,
+                      );
                       Navigator.pop(context);
                       _scheduleReminder(model);
                     },
@@ -513,11 +526,11 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
-  
+
   void _showMinutePicker(RadioPlayerModel model) {
     showModalBottomSheet(
       context: context,
-      builder: (context) => Container(
+      builder: (context) => SizedBox(
         height: 200,
         child: Column(
           children: [
@@ -525,10 +538,7 @@ class _SettingsPageState extends State<SettingsPage> {
               padding: const EdgeInsets.all(16),
               child: const Text(
                 'Izaberi minutu',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
             ),
             Expanded(
@@ -555,10 +565,10 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
-  
+
   Future<void> _scheduleReminder(RadioPlayerModel model) async {
     try {
-      await NotificationService.instance.scheduleDailyGoodNews(
+      await NotificationService.instance.scheduleDailyReminders(
         hour: model.notificationHour,
         minute: model.notificationMinute,
       );
@@ -580,7 +590,7 @@ class _SettingsPageState extends State<SettingsPage> {
   ) async {
     if (!value) {
       model.notificationsEnabled = false;
-      await NotificationService.instance.cancelDailyReminder();
+      await NotificationService.instance.cancelDailyReminders();
       return;
     }
     final granted = await NotificationService.instance.requestPermission();
@@ -603,15 +613,17 @@ class _SettingsPageState extends State<SettingsPage> {
   /// Opens the mail app with our address, a subject and a short template.
   Future<void> _openFeedbackEmail() async {
     const subject = 'Feedback / prijedlog - Feniks Radio aplikacija';
-    const body = 'Zdravo Feniks ekipa,\n\n'
+    const body =
+        'Zdravo Feniks ekipa,\n\n'
         'Šta mi se sviđa:\n\n\n'
         'Šta bih promijenio/la ili dodao/la:\n\n\n'
-        '(Verzija aplikacije: 1.0.0)';
+        '(Verzija aplikacije: ${AppConfig.appVersion})';
     final uri = Uri(
       scheme: 'mailto',
-      path: 'feniks.radio94.7@gmail.com',
+      path: AppConfig.supportEmail,
       // Encoded by hand: queryParameters would turn spaces into "+".
-      query: 'subject=${Uri.encodeComponent(subject)}'
+      query:
+          'subject=${Uri.encodeComponent(subject)}'
           '&body=${Uri.encodeComponent(body)}',
     );
     bool opened;
@@ -624,7 +636,7 @@ class _SettingsPageState extends State<SettingsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Nije pronađena aplikacija za email. Pišite nam na feniks.radio94.7@gmail.com',
+            'Nije pronađena aplikacija za email. Pišite nam na ${AppConfig.supportEmail}',
           ),
           behavior: SnackBarBehavior.floating,
         ),
@@ -635,13 +647,13 @@ class _SettingsPageState extends State<SettingsPage> {
   void _openEmailSupport() {
     final uri = Uri(
       scheme: 'mailto',
-      path: 'feniks.radio94.7@gmail.com',
+      path: AppConfig.supportEmail,
       // Encoded by hand: queryParameters would turn spaces into "+".
       query: 'subject=${Uri.encodeComponent('Podrška - Feniks Radio')}',
     );
     launchUrl(uri);
   }
-  
+
   void _showTermsOfService() {
     showDialog(
       context: context,
@@ -662,7 +674,7 @@ class _SettingsPageState extends State<SettingsPage> {
             '   Feniks Radio može obrađivati osnovne podatke naloga i statistiku korišćenja (npr. postignuća, omiljene pjesme) radi rada aplikacije.\n\n'
             '6. Feniks Radio zadržava pravo izmjene uslova\n'
             '   Uslovi korišćenja mogu biti ažurirani radi usklađivanja sa funkcionalnostima aplikacije i važećim pravilima.\n\n'
-            'Za više informacija kontaktirajte feniks.radio94.7@gmail.com',
+            'Za više informacija kontaktirajte ${AppConfig.supportEmail}',
           ),
         ),
         actions: [
@@ -679,15 +691,15 @@ class _SettingsPageState extends State<SettingsPage> {
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton.icon(
-        onPressed: () {
-          Navigator.pushNamedAndRemoveUntil(context, '/profile', (route) => false);
-        },
+        onPressed: () => Navigator.pop(context),
         icon: const Icon(Icons.person_outline_rounded, size: 20),
         label: const Text('Nazad na profil'),
         style: OutlinedButton.styleFrom(
           foregroundColor: isDarkMode ? AppTheme.primary : AppTheme.primaryDark,
           side: BorderSide(
-            color: isDarkMode ? AppTheme.primaryWithOpacity(0.6) : AppTheme.primary.withValues(alpha: 0.8),
+            color: isDarkMode
+                ? AppTheme.primaryWithOpacity(0.6)
+                : AppTheme.primary.withValues(alpha: 0.8),
           ),
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
@@ -697,5 +709,4 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
-
 }

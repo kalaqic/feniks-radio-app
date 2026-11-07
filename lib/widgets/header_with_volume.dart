@@ -16,7 +16,7 @@ class HeaderWithVolume extends StatelessWidget implements PreferredSizeWidget {
     final model = context.watch<RadioPlayerModel>();
     final themeProvider = context.watch<ThemeProvider>();
     final isDarkMode = themeProvider.isDarkMode;
-    
+
     return Column(
       children: [
         HeaderPlayer(model: model),
@@ -25,33 +25,37 @@ class HeaderWithVolume extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
-  Widget _buildVolumeSlider(BuildContext context, RadioPlayerModel model, bool isDarkMode) {
+  Widget _buildVolumeSlider(
+    BuildContext context,
+    RadioPlayerModel model,
+    bool isDarkMode,
+  ) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
-        gradient: isDarkMode 
-          ? LinearGradient(
-              colors: [
-                AppTheme.primaryDark.withValues(alpha: 0.8),
-                AppTheme.primary.withValues(alpha: 0.8),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            )
-          : LinearGradient(
-              colors: [
-                AppTheme.primaryDark.withValues(alpha: 0.9),
-                AppTheme.primary.withValues(alpha: 0.9),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+        gradient: isDarkMode
+            ? LinearGradient(
+                colors: [
+                  AppTheme.primaryDark.withValues(alpha: 0.8),
+                  AppTheme.primary.withValues(alpha: 0.8),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : LinearGradient(
+                colors: [
+                  AppTheme.primaryDark.withValues(alpha: 0.9),
+                  AppTheme.primary.withValues(alpha: 0.9),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
         boxShadow: [
           BoxShadow(
-            color: isDarkMode 
-              ? Colors.black.withValues(alpha: 0.3)
-              : AppTheme.primary.withValues(alpha: 0.2),
+            color: isDarkMode
+                ? Colors.black.withValues(alpha: 0.3)
+                : AppTheme.primary.withValues(alpha: 0.2),
             blurRadius: 15,
             offset: const Offset(0, 4),
           ),
@@ -61,17 +65,17 @@ class HeaderWithVolume extends StatelessWidget implements PreferredSizeWidget {
         top: false,
         child: Row(
           children: [
-            Icon(
-              Icons.volume_up_outlined,
-              color: Colors.white,
-              size: 20,
-            ),
+            const Icon(Icons.volume_up_outlined, color: Colors.white, size: 20),
             const SizedBox(width: 16),
             Expanded(
               child: SliderTheme(
                 data: SliderTheme.of(context).copyWith(
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 8,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 16,
+                  ),
                   trackHeight: 4,
                   activeTrackColor: Colors.white,
                   inactiveTrackColor: Colors.white.withValues(alpha: 0.3),

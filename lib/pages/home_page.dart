@@ -2,16 +2,19 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../config/routes.dart';
 import '../models/radio_player_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../theme/theme_provider.dart';
+import '../utils/log.dart';
+import '../widgets/badge_earned_modal.dart';
+import '../widgets/badges_card.dart';
+import '../widgets/celebration_modal.dart';
+import '../widgets/common_footer.dart';
 import '../widgets/currently_playing_card.dart';
 import '../widgets/header_with_volume.dart';
-import '../widgets/badges_card.dart';
-import '../widgets/common_footer.dart';
-import '../widgets/celebration_modal.dart';
-import '../widgets/badge_earned_modal.dart';
-import '../theme/theme_provider.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -49,36 +52,23 @@ class _HomePageState extends State<HomePage> {
             model.loadUserProgress(auth.user!.uid, data);
             unawaited(model.syncNow());
           }
-        } catch (_) {
-          // Avoid hard crash when Firestore rules are not ready yet.
+        } catch (e) {
+          // The app keeps working offline; loading is retried next time.
+          logError('Loading saved progress', e);
         }
       }
 
       if (!mounted) return;
-      model.trackPageVisit('/home');
+      model.trackPageVisit(Routes.home);
 
-      // Show a popup when a badge is earned (the model saves it by itself;
-      // the popup must not wait for the network).
-      model.onAchievementEarned = (badge) {
-        if (!mounted) return;
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (dialogContext) => BadgeEarnedModal(
-            badge: badge,
-            onDismiss: () {
-              final bid = badge['id'] as String?;
-              if (bid != null) {
-                context.read<RadioPlayerModel>().markBadgeShown(bid);
-              }
-              Navigator.of(dialogContext).pop();
-            },
-          ),
-        );
+      // Popup when an achievement is unlocked (saving happens in the model;
+      // the popup never waits for the network).
+      model.onAchievementEarned = (earned) {
+        if (mounted) _showAchievementPopup(earned.achievement);
       };
 
-      // Award anything the loaded progress already qualifies for
-      model.checkAndAwardBadges();
+      // Unlock anything the loaded progress already qualifies for
+      model.checkAchievements();
 
       // Auto-play only once per app launch, not on every return to home.
       if (model.takeAutoPlay() && !model.playing) {
@@ -89,8 +79,8 @@ class _HomePageState extends State<HomePage> {
 
       if (model.shouldShowCelebration) {
         _showCelebrationModal();
-      } else if (model.hasPendingBadges) {
-        _showBadgeEarnedModal();
+      } else {
+        _showNextPendingAchievement();
       }
     });
   }
@@ -106,41 +96,40 @@ class _HomePageState extends State<HomePage> {
           Navigator.of(context).pop();
           await model.play();
 
-          // Check for pending badges after celebration
-          if (model.hasPendingBadges) {
-            _showBadgeEarnedModal();
-          }
+          _showNextPendingAchievement();
         },
       ),
     );
   }
 
-  void _showBadgeEarnedModal() {
-    final model = context.read<RadioPlayerModel>();
-    if (!model.hasPendingBadges) return;
+  /// Shows the popups of unlocked achievements that were not shown yet,
+  /// one after another.
+  void _showNextPendingAchievement() {
+    if (!mounted) return;
+    final next = context.read<RadioPlayerModel>().nextPendingAchievement;
+    if (next != null) _showAchievementPopup(next, thenShowNext: true);
+  }
 
-    final badgeId = model.getNextPendingBadge();
-    final badge = model.allBadges[badgeId];
-
-    if (badge != null) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => BadgeEarnedModal(
-          badge: badge,
-          onDismiss: () {
-            final m = context.read<RadioPlayerModel>();
-            m.markBadgeShown(badgeId);
-            Navigator.of(dialogContext).pop();
-            if (mounted && m.hasPendingBadges) {
-              Future.delayed(const Duration(milliseconds: 500), () {
-                if (mounted) _showBadgeEarnedModal();
-              });
-            }
-          },
-        ),
-      );
-    }
+  void _showAchievementPopup(
+    Achievement achievement, {
+    bool thenShowNext = false,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => BadgeEarnedModal(
+        badge: achievement,
+        onDismiss: () {
+          context.read<RadioPlayerModel>().markAchievementShown(achievement);
+          Navigator.of(dialogContext).pop();
+          if (thenShowNext) {
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (mounted) _showNextPendingAchievement();
+            });
+          }
+        },
+      ),
+    );
   }
 
   @override
@@ -153,25 +142,23 @@ class _HomePageState extends State<HomePage> {
       extendBodyBehindAppBar: true,
       appBar: const HeaderWithVolume(),
       backgroundColor: Colors.transparent,
-      body: Container(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const SizedBox(
-                height: 270,
-              ), // Space for header + volume bar + padding
-              CurrentlyPlayingCard(model: model),
-              const SizedBox(height: 24),
-              const BadgesCard(),
-              const SizedBox(height: 140), // Space for bottom nav
-            ],
-          ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const SizedBox(
+              height: 270,
+            ), // Space for header + volume bar + padding
+            CurrentlyPlayingCard(model: model),
+            const SizedBox(height: 24),
+            const BadgesCard(),
+            const SizedBox(height: 140), // Space for bottom nav
+          ],
         ),
       ),
       bottomNavigationBar: CommonFooter(
-        currentRoute: '/home',
+        currentRoute: Routes.home,
         isDark: isDarkMode,
       ),
     );

@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../config/routes.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 
 class LoginRequiredDialog extends StatelessWidget {
   final String activityName;
-  
-  const LoginRequiredDialog({
-    super.key,
-    required this.activityName,
-  });
+
+  const LoginRequiredDialog({super.key, required this.activityName});
 
   static void show(BuildContext context, String activityName) {
     showDialog(
@@ -28,7 +27,11 @@ class LoginRequiredDialog extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [AppTheme.primary, AppTheme.primaryDark, AppTheme.accentDark],
+            colors: [
+              AppTheme.primary,
+              AppTheme.primaryDark,
+              AppTheme.accentDark,
+            ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -41,128 +44,130 @@ class LoginRequiredDialog extends StatelessWidget {
             ),
           ],
         ),
-        child: SingleChildScrollView(child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Icon
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppTheme.primary, AppTheme.primaryDark],
-                ),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryWithOpacity(0.3),
-                    blurRadius: 15,
-                    offset: const Offset(0, 8),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppTheme.primary, AppTheme.primaryDark],
                   ),
-                ],
-              ),
-              child: const Icon(
-                Icons.lock_outline,
-                color: Colors.white,
-                size: 32,
-              ),
-            ),
-            const SizedBox(height: 20),
-            
-            // Title
-            Text(
-              'Prijava potrebna',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            
-            // Message
-            Text(
-              'Da biste sačuvali svoj napredak u "$activityName", morate biti prijavljeni.',
-              style: TextStyle(
-                fontSize: 15,
-                height: 1.5,
-                color: Colors.white.withValues(alpha: 0.95),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            
-            // Buttons
-            Row(
-              children: [
-                // Cancel button
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      side: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.5),
-                      ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primaryWithOpacity(0.3),
+                      blurRadius: 15,
+                      offset: const Offset(0, 8),
                     ),
-                    child: Text(
-                      'Otkaži',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                
-                // Login button
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 10,
-                          offset: const Offset(0, 5),
+                child: const Icon(
+                  Icons.lock_outline,
+                  color: Colors.white,
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Title
+              const Text(
+                'Prijava potrebna',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+
+              // Message
+              Text(
+                'Da biste sačuvali svoj napredak u "$activityName", morate biti prijavljeni.',
+                style: TextStyle(
+                  fontSize: 15,
+                  height: 1.5,
+                  color: Colors.white.withValues(alpha: 0.95),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+
+              // Buttons
+              Row(
+                children: [
+                  // Cancel button
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ],
+                        side: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: const Text(
+                        'Otkaži',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Login button
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          Navigator.pushNamed(context, '/login');
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          alignment: Alignment.center,
-                          child: const Text(
-                            'Prijavi se',
-                            style: TextStyle(
-                              color: AppTheme.primary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            Navigator.pushNamed(context, Routes.login);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            alignment: Alignment.center,
+                            child: const Text(
+                              'Prijavi se',
+                              style: TextStyle(
+                                color: AppTheme.primary,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ],
-        )),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -179,4 +184,3 @@ extension AuthCheck on BuildContext {
     return true;
   }
 }
-

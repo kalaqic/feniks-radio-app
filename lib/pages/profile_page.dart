@@ -1,12 +1,20 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../theme/app_theme.dart';
-import '../theme/theme_provider.dart';
+
+import '../config/routes.dart';
+import '../models/radio_player_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
-import '../models/radio_player_model.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
+import '../theme/theme_provider.dart';
+import '../utils/log.dart';
+import '../widgets/app_card.dart';
 import '../widgets/common_footer.dart';
+import '../widgets/gradient_card.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -25,7 +33,9 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
     _loadDisplayEmail();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<RadioPlayerModel>().trackPageVisit('/profile');
+      if (mounted) {
+        context.read<RadioPlayerModel>().trackPageVisit(Routes.profile);
+      }
     });
   }
 
@@ -39,7 +49,9 @@ class _ProfilePageState extends State<ProfilePage> {
     final auth = context.read<AuthService>();
     if (auth.user?.uid == null) return;
     try {
-      final email = await FirestoreService.instance.getUserDisplayEmail(auth.user!.uid);
+      final email = await FirestoreService.instance.getUserDisplayEmail(
+        auth.user!.uid,
+      );
       if (mounted) {
         setState(() {
           _displayEmail = email;
@@ -53,7 +65,9 @@ class _ProfilePageState extends State<ProfilePage> {
           _displayEmail = null;
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      logError('Loading display email', e);
+    }
   }
 
   Future<void> _saveDisplayEmail() async {
@@ -110,95 +124,88 @@ class _ProfilePageState extends State<ProfilePage> {
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text(
-          'Moj profil',
-          style: TextStyle(
-            color: isDarkMode ? Colors.white : null,
-          ),
-        ),
+        title: const Text('Moj profil'),
         automaticallyImplyLeading: false,
-        backgroundColor: isDarkMode ? Colors.transparent : null,
-        elevation: isDarkMode ? 0 : null,
       ),
-      body: Container(
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 20),
-                if (auth.isAuthenticated && auth.user != null) ...[
-                  _buildProfileCard(context, auth, model, isDarkMode),
-                  const SizedBox(height: 16),
-                  _buildEmailSection(context, auth, isDarkMode),
-                  const SizedBox(height: 24),
-                  _buildPointsCard(context, model, isDarkMode),
-                  const SizedBox(height: 32),
-                  _buildLogoutButton(context, auth, isDarkMode),
-                  const SizedBox(height: 12),
-                  Center(
-                    child: TextButton(
-                      onPressed: () => _confirmDeleteAccount(context, auth),
-                      child: Text(
-                        'Obriši nalog',
-                        style: TextStyle(
-                          color: isDarkMode
-                              ? AppTheme.textSecondary
-                              : Colors.grey.shade600,
-                          decoration: TextDecoration.underline,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 20),
+              if (auth.isAuthenticated && auth.user != null) ...[
+                _buildProfileCard(context, auth, model, isDarkMode),
+                const SizedBox(height: 16),
+                _buildEmailSection(context, auth, isDarkMode),
+                const SizedBox(height: 24),
+                _buildPointsCard(context, model, isDarkMode),
+                const SizedBox(height: 32),
+                _buildLogoutButton(context, auth, isDarkMode),
+                const SizedBox(height: 12),
+                Center(
+                  child: TextButton(
+                    onPressed: () => _confirmDeleteAccount(context, auth),
+                    child: Text(
+                      'Obriši nalog',
+                      style: TextStyle(
+                        color: AppColors.of(isDarkMode).secondaryText,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ),
+              ] else ...[
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.person_outline_rounded,
+                          size: 64,
+                          color: AppColors.of(isDarkMode).mutedText,
                         ),
-                      ),
-                    ),
-                  ),
-                ] else ...[
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Column(
-                        children: [
-                          Icon(
-                            Icons.person_outline_rounded,
-                            size: 64,
-                            color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade400,
+                        const SizedBox(height: 16),
+                        Text(
+                          'Prijavite se da biste vidjeli profil',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: AppColors.of(isDarkMode).secondaryText,
                           ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Prijavite se da biste vidjeli profil',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 24),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () => Navigator.pushNamed(context, '/login'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.primary,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () =>
+                                Navigator.pushNamed(context, Routes.login),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              child: const Text('Prijavi se'),
                             ),
+                            child: const Text('Prijavi se'),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-                const SizedBox(height: 120),
+                ),
               ],
-            ),
+              const SizedBox(height: 120),
+            ],
           ),
         ),
       ),
-      bottomNavigationBar: CommonFooter(currentRoute: '/profile', isDark: isDarkMode),
+      bottomNavigationBar: CommonFooter(
+        currentRoute: Routes.profile,
+        isDark: isDarkMode,
+      ),
     );
   }
 
@@ -210,22 +217,7 @@ class _ProfilePageState extends State<ProfilePage> {
   ) {
     final displayName = auth.user?.displayName ?? 'Korisnik';
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: isDarkMode ? AppTheme.cardBackground : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: isDarkMode ? Colors.black26 : Colors.black12,
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-        border: Border.all(
-          color: isDarkMode ? AppTheme.cardBorder : Colors.grey.shade200,
-        ),
-      ),
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -234,8 +226,8 @@ class _ProfilePageState extends State<ProfilePage> {
               Container(
                 width: 56,
                 height: 56,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
                     colors: [AppTheme.primary, AppTheme.primaryDark],
                   ),
                   shape: BoxShape.circle,
@@ -261,7 +253,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
-                        color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF1D1D1F),
+                        color: AppColors.of(isDarkMode).primaryText,
                       ),
                     ),
                     if (_displayEmail != null && _displayEmail!.isNotEmpty) ...[
@@ -270,7 +262,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         _displayEmail!,
                         style: TextStyle(
                           fontSize: 13,
-                          color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600,
+                          color: AppColors.of(isDarkMode).secondaryText,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -283,13 +275,15 @@ class _ProfilePageState extends State<ProfilePage> {
                 icon: Icon(
                   Icons.settings_rounded,
                   size: 22,
-                  color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF4B5563),
+                  color: isDarkMode
+                      ? AppTheme.textPrimary
+                      : const Color(0xFF4B5563),
                 ),
                 tooltip: 'Postavke',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
                 onPressed: () {
-                  Navigator.pushNamed(context, '/settings');
+                  Navigator.pushNamed(context, Routes.settings);
                 },
               ),
             ],
@@ -299,7 +293,11 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildEmailSection(BuildContext context, AuthService auth, bool isDarkMode) {
+  Widget _buildEmailSection(
+    BuildContext context,
+    AuthService auth,
+    bool isDarkMode,
+  ) {
     if (auth.user?.uid == null) return const SizedBox.shrink();
 
     return Container(
@@ -317,10 +315,7 @@ class _ProfilePageState extends State<ProfilePage> {
             : const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFFFFF8F5),
-                  Color(0xFFF5F0FF),
-                ],
+                colors: [Color(0xFFFFF8F5), Color(0xFFF5F0FF)],
               ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
@@ -331,7 +326,9 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         boxShadow: [
           BoxShadow(
-            color: (isDarkMode ? Colors.black : AppTheme.primary).withValues(alpha: isDarkMode ? 0.2 : 0.06),
+            color: (isDarkMode ? Colors.black : AppTheme.primary).withValues(
+              alpha: isDarkMode ? 0.2 : 0.06,
+            ),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -342,10 +339,7 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           Row(
             children: [
-              Text(
-                '💜',
-                style: TextStyle(fontSize: 28),
-              ),
+              const Text('💜', style: TextStyle(fontSize: 28)),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -353,7 +347,9 @@ class _ProfilePageState extends State<ProfilePage> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF2D1B4E),
+                    color: isDarkMode
+                        ? AppTheme.textPrimary
+                        : const Color(0xFF2D1B4E),
                     letterSpacing: -0.2,
                   ),
                 ),
@@ -366,7 +362,9 @@ class _ProfilePageState extends State<ProfilePage> {
             style: TextStyle(
               fontSize: 14,
               height: 1.45,
-              color: isDarkMode ? AppTheme.textSecondary : const Color(0xFF5C4D6B),
+              color: isDarkMode
+                  ? AppTheme.textSecondary
+                  : const Color(0xFF5C4D6B),
             ),
           ),
           const SizedBox(height: 18),
@@ -377,49 +375,55 @@ class _ProfilePageState extends State<ProfilePage> {
               prefixIcon: Icon(
                 Icons.mail_outline_rounded,
                 size: 22,
-                color: isDarkMode ? AppTheme.textSecondary : const Color(0xFF8B7B9A),
+                color: isDarkMode
+                    ? AppTheme.textSecondary
+                    : const Color(0xFF8B7B9A),
               ),
               hintStyle: TextStyle(
                 fontSize: 14,
-                color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade500,
+                color: AppColors.of(isDarkMode).mutedText,
               ),
               filled: true,
-              fillColor: isDarkMode ? AppTheme.backgroundMedium : Colors.white.withValues(alpha: 0.8),
+              fillColor: isDarkMode
+                  ? AppTheme.backgroundMedium
+                  : Colors.white.withValues(alpha: 0.8),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide(
-                  color: isDarkMode ? AppTheme.cardBorder : const Color(0xFFE0D4E8),
+                  color: isDarkMode
+                      ? AppTheme.cardBorder
+                      : const Color(0xFFE0D4E8),
                 ),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide(
-                  color: isDarkMode ? AppTheme.cardBorder : const Color(0xFFE0D4E8),
+                  color: isDarkMode
+                      ? AppTheme.cardBorder
+                      : const Color(0xFFE0D4E8),
                 ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(
-                  color: AppTheme.primary,
-                  width: 2,
-                ),
+                borderSide: const BorderSide(color: AppTheme.primary, width: 2),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
             ),
             keyboardType: TextInputType.emailAddress,
             autocorrect: false,
             style: TextStyle(
               fontSize: 15,
-              color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF1D1D1F),
+              color: AppColors.of(isDarkMode).primaryText,
             ),
           ),
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _savingEmail
-                  ? null
-                  : () => _saveDisplayEmail(),
+              onPressed: _savingEmail ? null : _saveDisplayEmail,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primary,
                 foregroundColor: Colors.white,
@@ -433,7 +437,10 @@ class _ProfilePageState extends State<ProfilePage> {
                   ? const SizedBox(
                       height: 22,
                       width: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -450,26 +457,22 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildPointsCard(BuildContext context, RadioPlayerModel model, bool isDarkMode) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: AppTheme.primaryGradient,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryWithOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+  Widget _buildPointsCard(
+    BuildContext context,
+    RadioPlayerModel model,
+    bool isDarkMode,
+  ) {
+    return GradientCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.emoji_events_rounded, color: Colors.white.withValues(alpha: 0.9), size: 28),
+              Icon(
+                Icons.emoji_events_rounded,
+                color: Colors.white.withValues(alpha: 0.9),
+                size: 28,
+              ),
               const SizedBox(width: 12),
               const Text(
                 'Moji Feniks Poeni',
@@ -551,7 +554,9 @@ class _ProfilePageState extends State<ProfilePage> {
             uid,
           );
           model.loadUserProgress(uid, data);
-        } catch (_) {}
+        } catch (e) {
+          logError('Restoring progress after a failed deletion', e);
+        }
       }
     }
     if (!context.mounted) return;
@@ -567,20 +572,27 @@ class _ProfilePageState extends State<ProfilePage> {
         behavior: SnackBarBehavior.floating,
       ),
     );
-    Navigator.pushNamedAndRemoveUntil(context, '/welcome', (route) => false);
+    unawaited(
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        Routes.welcome,
+        (route) => false,
+      ),
+    );
   }
 
-  Widget _buildLogoutButton(BuildContext context, AuthService authService, bool isDarkMode) {
+  Widget _buildLogoutButton(
+    BuildContext context,
+    AuthService authService,
+    bool isDarkMode,
+  ) {
     return Container(
       width: double.infinity,
       height: 50,
       decoration: BoxDecoration(
         color: Colors.red.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.red.withValues(alpha: 0.3),
-          width: 1,
-        ),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.3), width: 1),
       ),
       child: Material(
         color: Colors.transparent,
@@ -591,7 +603,9 @@ class _ProfilePageState extends State<ProfilePage> {
               context: context,
               builder: (ctx) => AlertDialog(
                 title: const Text('Odjava'),
-                content: const Text('Da li ste sigurni da želite da se odjavite?'),
+                content: const Text(
+                  'Da li ste sigurni da želite da se odjavite?',
+                ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, false),
@@ -599,9 +613,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, true),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.red,
-                    ),
+                    style: TextButton.styleFrom(foregroundColor: Colors.red),
                     child: const Text('Odjavi se'),
                   ),
                 ],
@@ -619,7 +631,13 @@ class _ProfilePageState extends State<ProfilePage> {
               await authService.signOut();
               model.resetProgress();
               if (context.mounted) {
-                Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                unawaited(
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    Routes.login,
+                    (route) => false,
+                  ),
+                );
               }
             }
           },

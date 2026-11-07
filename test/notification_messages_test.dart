@@ -1,9 +1,9 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:feniksflutter/services/notification_service.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('there are 20 different daily messages', () {
-    final messages = NotificationService.dailyMessages;
+    const messages = NotificationService.dailyMessages;
     expect(messages.length, 20);
     expect(messages.map((m) => m.$1).toSet().length, 20);
   });

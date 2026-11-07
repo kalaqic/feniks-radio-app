@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../config/routes.dart';
 import '../models/radio_player_model.dart';
 import '../services/auth_service.dart';
-import '../widgets/login_required_dialog.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../widgets/common_footer.dart';
+import '../widgets/login_required_dialog.dart';
 
 class FavoritesPage extends StatefulWidget {
   const FavoritesPage({super.key});
@@ -19,7 +22,9 @@ class _FavoritesPageState extends State<FavoritesPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<RadioPlayerModel>().trackPageVisit('/favorites');
+      if (mounted) {
+        context.read<RadioPlayerModel>().trackPageVisit(Routes.favorites);
+      }
     });
   }
 
@@ -33,31 +38,27 @@ class _FavoritesPageState extends State<FavoritesPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text(
-          'Omiljene Pjesme',
-          style: TextStyle(
-            color: isDarkMode ? Colors.white : null,
-          ),
-        ),
-        backgroundColor: isDarkMode ? Colors.transparent : null,
-        elevation: isDarkMode ? 0 : null,
+        title: const Text('Omiljene Pjesme'),
         leading: IconButton(
           icon: Icon(
             Icons.chevron_left,
-            color: isDarkMode ? Colors.white : Theme.of(context).colorScheme.primary,
+            color: isDarkMode
+                ? Colors.white
+                : Theme.of(context).colorScheme.primary,
             size: 32,
           ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Container(
-        child: SafeArea(
-          child: favoriteSongs.isEmpty
-              ? _buildEmptyState(isDarkMode)
-              : _buildFavoritesList(favoriteSongs, model, isDarkMode),
-        ),
+      body: SafeArea(
+        child: favoriteSongs.isEmpty
+            ? _buildEmptyState(isDarkMode)
+            : _buildFavoritesList(favoriteSongs, model, isDarkMode),
       ),
-      bottomNavigationBar: CommonFooter(currentRoute: '/favorites', isDark: isDarkMode),
+      bottomNavigationBar: CommonFooter(
+        currentRoute: Routes.favorites,
+        isDark: isDarkMode,
+      ),
     );
   }
 
@@ -72,14 +73,16 @@ class _FavoritesPageState extends State<FavoritesPage> {
               width: 120,
               height: 120,
               decoration: BoxDecoration(
-                color: isDarkMode ? AppTheme.cardBackground : Colors.grey.shade100,
+                color: AppColors.of(isDarkMode).surface,
                 shape: BoxShape.circle,
-                border: isDarkMode ? Border.all(color: AppTheme.cardBorder) : null,
+                border: isDarkMode
+                    ? Border.all(color: AppTheme.cardBorder)
+                    : null,
               ),
               child: Icon(
                 Icons.favorite_border_rounded,
                 size: 60,
-                color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade400,
+                color: AppColors.of(isDarkMode).mutedText,
               ),
             ),
             const SizedBox(height: 24),
@@ -96,7 +99,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
               'Dodajte pjesme u omiljene tokom slušanja Feniks Radija',
               style: TextStyle(
                 fontSize: 14,
-                color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade500,
+                color: AppColors.of(isDarkMode).mutedText,
                 height: 1.4,
               ),
               textAlign: TextAlign.center,
@@ -107,7 +110,11 @@ class _FavoritesPageState extends State<FavoritesPage> {
     );
   }
 
-  Widget _buildFavoritesList(List<String> favoriteSongs, RadioPlayerModel model, bool isDarkMode) {
+  Widget _buildFavoritesList(
+    List<String> favoriteSongs,
+    RadioPlayerModel model,
+    bool isDarkMode,
+  ) {
     return ListView.builder(
       padding: const EdgeInsets.all(24),
       itemCount: favoriteSongs.length,
@@ -130,27 +137,20 @@ class _FavoritesPageState extends State<FavoritesPage> {
                     end: Alignment.bottomRight,
                   )
                 : const LinearGradient(
-                    colors: [
-                      Color(0xFFFFFFFF),
-                      Color(0xFFF8FAFF),
-                    ],
+                    colors: [Color(0xFFFFFFFF), Color(0xFFF8FAFF)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: isDarkMode 
-                  ? Colors.black.withValues(alpha: 0.3)
-                  : Colors.black.withValues(alpha: 0.05),
+                color: AppColors.of(isDarkMode).shadow,
                 blurRadius: 18,
                 offset: const Offset(0, 6),
               ),
             ],
             border: Border.all(
-              color: isDarkMode
-                  ? AppTheme.cardBorder
-                  : const Color(0xFFE5E7EB),
+              color: AppColors.of(isDarkMode).border,
               width: 1,
             ),
           ),
@@ -158,7 +158,8 @@ class _FavoritesPageState extends State<FavoritesPage> {
             color: Colors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(18),
-              onTap: () => _showSongDetails(title, artist, song, model, isDarkMode),
+              onTap: () =>
+                  _showSongDetails(title, artist, song, model, isDarkMode),
               child: Padding(
                 padding: const EdgeInsets.all(18),
                 child: Row(
@@ -185,7 +186,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    
+
                     // Song Info
                     Expanded(
                       child: Column(
@@ -196,7 +197,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
-                              color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF1F2937),
+                              color: AppColors.of(isDarkMode).primaryText,
                               letterSpacing: -0.2,
                             ),
                             maxLines: 1,
@@ -207,7 +208,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                             artist,
                             style: TextStyle(
                               fontSize: 13,
-                              color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600,
+                              color: AppColors.of(isDarkMode).secondaryText,
                               fontWeight: FontWeight.w500,
                             ),
                             maxLines: 1,
@@ -216,7 +217,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                         ],
                       ),
                     ),
-                    
+
                     // Remove from favorites button
                     Container(
                       width: 40,
@@ -239,7 +240,10 @@ class _FavoritesPageState extends State<FavoritesPage> {
                           onTap: () {
                             final authService = context.read<AuthService>();
                             if (!authService.isAuthenticated) {
-                              LoginRequiredDialog.show(context, 'brisanje omiljenih pjesama');
+                              LoginRequiredDialog.show(
+                                context,
+                                'brisanje omiljenih pjesama',
+                              );
                               return;
                             }
                             _removeFavorite(song, model);
@@ -262,14 +266,20 @@ class _FavoritesPageState extends State<FavoritesPage> {
     );
   }
 
-  void _showSongDetails(String title, String artist, String fullSong, RadioPlayerModel model, bool isDarkMode) {
+  void _showSongDetails(
+    String title,
+    String artist,
+    String fullSong,
+    RadioPlayerModel model,
+    bool isDarkMode,
+  ) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => Container(
         decoration: BoxDecoration(
-          color: isDarkMode ? AppTheme.cardBackground : Colors.white,
+          color: AppColors.of(isDarkMode).card,
           borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(24),
             topRight: Radius.circular(24),
@@ -285,12 +295,14 @@ class _FavoritesPageState extends State<FavoritesPage> {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade300,
+                color: isDarkMode
+                    ? AppTheme.textSecondary
+                    : Colors.grey.shade300,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
             const SizedBox(height: 24),
-            
+
             // Large Music Icon
             Container(
               width: 80,
@@ -313,31 +325,31 @@ class _FavoritesPageState extends State<FavoritesPage> {
               ),
             ),
             const SizedBox(height: 24),
-            
+
             // Song Title
             Text(
               title,
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
-                color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF1F2937),
+                color: AppColors.of(isDarkMode).primaryText,
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            
+
             // Artist
             Text(
               artist,
               style: TextStyle(
                 fontSize: 16,
-                color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600,
+                color: AppColors.of(isDarkMode).secondaryText,
                 fontWeight: FontWeight.w500,
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
-            
+
             // Action Buttons
             Row(
               children: [
@@ -347,10 +359,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                     decoration: BoxDecoration(
                       color: Colors.red.shade50,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.red.shade200,
-                        width: 1,
-                      ),
+                      border: Border.all(color: Colors.red.shade200, width: 1),
                     ),
                     child: Material(
                       color: Colors.transparent,
@@ -360,7 +369,10 @@ class _FavoritesPageState extends State<FavoritesPage> {
                           final authService = context.read<AuthService>();
                           if (!authService.isAuthenticated) {
                             Navigator.pop(context); // Close dialog first
-                            LoginRequiredDialog.show(context, 'brisanje omiljenih pjesama');
+                            LoginRequiredDialog.show(
+                              context,
+                              'brisanje omiljenih pjesama',
+                            );
                             return;
                           }
                           _removeFavorite(fullSong, model);
@@ -411,9 +423,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
         ),
         backgroundColor: Colors.red.shade400,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
       ),
     );

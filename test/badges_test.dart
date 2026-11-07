@@ -2,8 +2,8 @@
 //
 // The model is driven by a fake clock and simulated timer ticks, so days of
 // listening are checked in seconds. Run with: flutter test
-import 'package:flutter_test/flutter_test.dart';
 import 'package:feniksflutter/models/radio_player_model.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 class FakeClock {
   FakeClock(this.now);
@@ -53,7 +53,7 @@ class Sim {
     goTo(DateTime(n.year, n.month, n.day + days, n.hour, n.minute));
   }
 
-  bool has(String id) => model.hasBadge(id);
+  bool has(String id) => model.hasAchievement(Achievements.byId(id)!);
 }
 
 const min = Duration(minutes: 1);
@@ -81,7 +81,7 @@ void main() {
       expect(s.model.listeningPoints, 10);
       expect(s.model.sessionCount, 0);
       // Only "first listen" can be earned this way.
-      expect(s.model.earnedBadges.map((b) => b['id']), ['first_listen']);
+      expect(s.model.earnedAchievements.map((e) => e.id), ['first_listen']);
     });
 
     test('buffering (playing but not ready) is not counted', () {
@@ -97,14 +97,14 @@ void main() {
     test('total points = listening points + badge points', () {
       final s = Sim();
       s.listen(min * 61);
-      final badgeSum = s.model.earnedBadges.fold<int>(
+      final badgeSum = s.model.earnedAchievements.fold<int>(
         0,
-        (sum, b) => sum + (b['points'] as int),
+        (sum, e) => sum + e.achievement.points,
       );
-      expect(s.model.badgePoints, badgeSum);
+      expect(s.model.achievementPoints, badgeSum);
       expect(
         s.model.totalFeniksPoints,
-        s.model.listeningPoints + s.model.badgePoints,
+        s.model.listeningPoints + s.model.achievementPoints,
       );
     });
   });
@@ -185,6 +185,21 @@ void main() {
       expect(s.model.consecutiveDays, 0);
     });
 
+    test('streak survives daylight saving changes', () {
+      // Clocks change on 29 March and 25 October 2026 in Europe.
+      for (final start in [
+        DateTime(2026, 3, 27, 9),
+        DateTime(2026, 10, 23, 9),
+      ]) {
+        final s = Sim(start);
+        for (var d = 0; d < 5; d++) {
+          s.goTo(DateTime(start.year, start.month, start.day + d, 9));
+          s.listen(min * 6);
+        }
+        expect(s.model.consecutiveDays, 5);
+      }
+    });
+
     test('streak shows 0 after a missed day', () {
       final s = Sim();
       s.listen(min * 6);
@@ -255,7 +270,7 @@ void main() {
       // Removing and adding again does not award anything twice
       s.model.toggleFavorite();
       s.model.toggleFavorite();
-      final ids = s.model.earnedBadges.map((b) => b['id']).toList();
+      final ids = s.model.earnedAchievements.map((e) => e.id).toList();
       expect(ids.where((id) => id == 'music_lover').length, 1);
     });
 
@@ -274,12 +289,12 @@ void main() {
 
     test('explorer needs all 6 pages', () {
       final s = Sim();
-      for (final p in kExplorablePages.take(5)) {
+      for (final p in ProgressRules.explorablePages.take(5)) {
         s.model.trackPageVisit(p);
       }
       s.model.trackPageVisit('/ether-messages'); // removed page, ignored
       expect(s.has('app_explorer'), isFalse);
-      s.model.trackPageVisit(kExplorablePages.last);
+      s.model.trackPageVisit(ProgressRules.explorablePages.last);
       expect(s.has('app_explorer'), isTrue);
     });
 
@@ -299,28 +314,36 @@ void main() {
         s.model.debugSetSong('Pjesma $i', 'Izvođač');
         if (i < 100) s.model.toggleFavorite();
       }
-      for (final p in kExplorablePages) {
+      for (final p in ProgressRules.explorablePages) {
         s.model.trackPageVisit(p);
       }
 
-      final earned = s.model.earnedBadges.map((b) => b['id'] as String);
-      expect(earned.toSet(), s.model.allBadges.keys.toSet());
+      final earned = s.model.earnedAchievements.map((e) => e.id);
+      expect(earned.toSet(), s.model.allAchievements.map((a) => a.id).toSet());
       expect(earned.length, earned.toSet().length, reason: 'no duplicates');
 
-      final allPoints = s.model.allBadges.values.fold<int>(
+      final allPoints = s.model.allAchievements.fold<int>(
         0,
-        (sum, b) => sum + (b['points'] as int),
+        (sum, a) => sum + a.points,
       );
-      expect(s.model.badgePoints, allPoints);
+      expect(s.model.achievementPoints, allPoints);
       // Firestore rules allow at most this many badge points
       expect(allPoints, lessThanOrEqualTo(9500));
-      expect(s.model.allBadges.length, lessThanOrEqualTo(35));
+      expect(s.model.allAchievements.length, lessThanOrEqualTo(35));
     });
 
-    test('badge names and icons are unique', () {
-      final badges = Sim().model.allBadges.values;
-      final names = badges.map((b) => b['name']).toList();
-      final icons = badges.map((b) => b['icon']).toList();
+    test('badge ids, names and icons are unique', () {
+      expect(
+        Achievements.all.map((a) => a.id).toSet().length,
+        Achievements.all.length,
+      );
+      expect(
+        Achievements.appExplorer.requirement,
+        ProgressRules.explorablePages.length,
+      );
+      const badges = Achievements.all;
+      final names = badges.map((a) => a.name).toList();
+      final icons = badges.map((a) => a.icon).toList();
       expect(names.toSet().length, names.length);
       expect(icons.toSet().length, icons.length);
     });
@@ -332,24 +355,24 @@ void main() {
       a.listen(min * 65);
       a.nextDay();
       a.listen(min * 6);
-      final data = a.model.getAchievementData();
+      final data = a.model.progressToJson();
 
       final b = Sim(a.clock.now);
       b.model.loadUserProgress('u1', data);
       expect(b.model.totalListeningMinutes, a.model.totalListeningMinutes);
       expect(b.model.listeningPoints, a.model.listeningPoints);
-      expect(b.model.badgePoints, a.model.badgePoints);
+      expect(b.model.achievementPoints, a.model.achievementPoints);
       expect(b.model.consecutiveDays, a.model.consecutiveDays);
       expect(
-        b.model.earnedBadges.map((x) => x['id']).toSet(),
-        a.model.earnedBadges.map((x) => x['id']).toSet(),
+        b.model.earnedAchievements.map((e) => e.id).toSet(),
+        a.model.earnedAchievements.map((e) => e.id).toSet(),
       );
     });
 
     test('listening before login is added, not lost', () {
       final saved = Sim();
       saved.listen(min * 30);
-      final data = saved.model.getAchievementData();
+      final data = saved.model.progressToJson();
 
       final s = Sim(saved.clock.now.add(const Duration(minutes: 5)));
       s.listen(min * 15); // listened before the data loaded
@@ -362,10 +385,10 @@ void main() {
     test('logout clears progress', () {
       final s = Sim();
       s.listen(min * 30);
-      s.model.loadUserProgress('u1', s.model.getAchievementData());
+      s.model.loadUserProgress('u1', s.model.progressToJson());
       s.model.resetProgress();
       expect(s.model.totalFeniksPoints, 0);
-      expect(s.model.earnedBadges, isEmpty);
+      expect(s.model.earnedAchievements, isEmpty);
       expect(s.model.loadedUserId, isNull);
     });
   });

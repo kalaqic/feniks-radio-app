@@ -25,11 +25,7 @@ class StatItem extends StatelessWidget {
             color: iconColor.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
-          child: Icon(
-            icon,
-            color: iconColor,
-            size: 18,
-          ),
+          child: Icon(icon, color: iconColor, size: 18),
         ),
         const SizedBox(height: 8),
         Text(

@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/auth_service.dart';
+
+import '../config/routes.dart';
 import '../models/radio_player_model.dart';
+import '../services/auth_service.dart';
+import '../utils/log.dart';
 
 class LoadingScreen extends StatefulWidget {
   const LoadingScreen({super.key});
@@ -17,12 +22,6 @@ class _LoadingScreenState extends State<LoadingScreen>
   late Animation<double> _logoScale;
   late Animation<double> _logoRotation;
 
-  bool _isFallbackSong(RadioPlayerModel model) {
-    final title = model.currentSong.trim().toLowerCase();
-    // Treat default station name as unresolved metadata.
-    return title.isEmpty || title == 'feniks radio';
-  }
-
   Future<void> _runStartupFlow() async {
     final model = context.read<RadioPlayerModel>();
 
@@ -30,12 +29,14 @@ class _LoadingScreenState extends State<LoadingScreen>
     // internet (or while a jingle plays) the app must still open.
     final deadline = DateTime.now().add(const Duration(seconds: 8));
     while (mounted &&
-        _isFallbackSong(model) &&
+        model.isFallbackSong &&
         DateTime.now().isBefore(deadline)) {
       try {
         await model.updateSong().timeout(const Duration(seconds: 5));
-      } catch (_) {}
-      if (!_isFallbackSong(model)) break;
+      } catch (e) {
+        logError('Loading the current song', e);
+      }
+      if (!model.isFallbackSong) break;
       await Future.delayed(const Duration(seconds: 1));
     }
 
@@ -43,9 +44,11 @@ class _LoadingScreenState extends State<LoadingScreen>
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
     final isLoggedIn = context.read<AuthService>().isAuthenticated;
-    Navigator.pushReplacementNamed(
-      context,
-      isLoggedIn ? '/home' : '/welcome',
+    unawaited(
+      Navigator.pushReplacementNamed(
+        context,
+        isLoggedIn ? Routes.home : Routes.welcome,
+      ),
     );
   }
 

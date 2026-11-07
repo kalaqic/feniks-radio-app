@@ -1,11 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../theme/app_theme.dart';
-import '../theme/theme_provider.dart';
+
+import '../config/routes.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
+import '../theme/theme_provider.dart';
+import '../utils/log.dart';
 
 class WelcomePage extends StatefulWidget {
   const WelcomePage({super.key});
@@ -30,7 +36,11 @@ class _WelcomePageState extends State<WelcomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthService>();
       if (auth.isAuthenticated && mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          Routes.home,
+          (route) => false,
+        );
       }
     });
   }
@@ -73,8 +83,10 @@ class _WelcomePageState extends State<WelcomePage> {
       return;
     }
 
+    final authService = context.read<AuthService>();
     final taken = await FirestoreService.instance.isUsernameTaken(name);
-    if (taken && mounted) {
+    if (!mounted) return;
+    if (taken) {
       _showError('Korisničko ime je već zauzeto.');
       return;
     }
@@ -82,7 +94,6 @@ class _WelcomePageState extends State<WelcomePage> {
     setState(() => _isLoading = true);
 
     try {
-      final authService = context.read<AuthService>();
       final email = _generateEmail(name);
       final success = await authService.signUpWithEmailAndPassword(
         email: email,
@@ -97,23 +108,38 @@ class _WelcomePageState extends State<WelcomePage> {
         final uid = authService.user?.uid;
         if (uid != null) {
           try {
-            await FirestoreService.instance.createOrUpdateUser(uid, name, email: email);
+            await FirestoreService.instance.createOrUpdateUser(
+              uid,
+              name,
+              email: email,
+            );
           } on UsernameTakenException {
             // Someone took the name in the meantime: remove the new account
             // so it does not stay half-created.
             try {
               await authService.user?.delete();
-            } catch (_) {}
+            } catch (e) {
+              logError('Deleting half-created account', e);
+            }
             await authService.signOut();
             if (mounted) _showError('Korisničko ime je već zauzeto.');
             return;
           }
         }
         if (mounted) {
-          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+          unawaited(
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              Routes.home,
+              (route) => false,
+            ),
+          );
         }
       } else {
-        _showError(authService.errorMessage ?? 'Greška pri kreiranju naloga. Pokušajte ponovo.');
+        _showError(
+          authService.errorMessage ??
+              'Greška pri kreiranju naloga. Pokušajte ponovo.',
+        );
       }
     } on UsernameTakenException {
       if (mounted) {
@@ -125,7 +151,9 @@ class _WelcomePageState extends State<WelcomePage> {
         setState(() => _isLoading = false);
         _showError('Greška: $e');
       }
-      if (kDebugMode) debugPrint('WelcomePage _handleCreateAccount error: $e\n$stack');
+      if (kDebugMode) {
+        debugPrint('WelcomePage _handleCreateAccount error: $e\n$stack');
+      }
     }
   }
 
@@ -148,7 +176,9 @@ class _WelcomePageState extends State<WelcomePage> {
             ),
           ),
           SafeArea(
-            child: _showRegisterForm ? _buildRegisterForm(isDarkMode) : _buildWelcome(isDarkMode),
+            child: _showRegisterForm
+                ? _buildRegisterForm(isDarkMode)
+                : _buildWelcome(isDarkMode),
           ),
         ],
       ),
@@ -168,7 +198,7 @@ class _WelcomePageState extends State<WelcomePage> {
             fit: BoxFit.contain,
           ),
           const Spacer(flex: 2),
-          // Red button: Napravi svoj račun
+          // Red button: create an account
           SizedBox(
             width: double.infinity,
             height: 56,
@@ -193,7 +223,7 @@ class _WelcomePageState extends State<WelcomePage> {
           ),
           const SizedBox(height: 24),
           TextButton(
-            onPressed: () => Navigator.pushNamed(context, '/login'),
+            onPressed: () => Navigator.pushNamed(context, Routes.login),
             child: Text(
               'Već imate račun? Prijavite se',
               style: TextStyle(
@@ -219,25 +249,18 @@ class _WelcomePageState extends State<WelcomePage> {
           : const Icon(Icons.lock_outline),
       suffixIcon: suffixIcon,
       filled: true,
-      fillColor: isDarkMode ? AppTheme.cardBackground : Colors.white,
+      fillColor: AppColors.of(isDarkMode).card,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: isDarkMode ? AppTheme.cardBorder : Colors.grey.shade300,
-        ),
+        borderSide: BorderSide(color: AppColors.of(isDarkMode).border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: isDarkMode ? AppTheme.cardBorder : Colors.grey.shade300,
-        ),
+        borderSide: BorderSide(color: AppColors.of(isDarkMode).border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: AppTheme.primary,
-          width: 2,
-        ),
+        borderSide: const BorderSide(color: AppTheme.primary, width: 2),
       ),
     );
   }
@@ -278,11 +301,7 @@ class _WelcomePageState extends State<WelcomePage> {
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.radio,
-                color: Colors.white,
-                size: 50,
-              ),
+              child: const Icon(Icons.radio, color: Colors.white, size: 50),
             ),
             const SizedBox(height: 24),
             Text(
@@ -290,7 +309,7 @@ class _WelcomePageState extends State<WelcomePage> {
               style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.w700,
-                color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF1F2937),
+                color: AppColors.of(isDarkMode).primaryText,
               ),
               textAlign: TextAlign.center,
             ),
@@ -299,7 +318,7 @@ class _WelcomePageState extends State<WelcomePage> {
               'Unesite korisničko ime i lozinku',
               style: TextStyle(
                 fontSize: 16,
-                color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600,
+                color: AppColors.of(isDarkMode).secondaryText,
               ),
               textAlign: TextAlign.center,
             ),
@@ -314,7 +333,9 @@ class _WelcomePageState extends State<WelcomePage> {
               ],
               decoration: _loginStyleDecoration('Korisničko ime'),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Molimo unesite korisničko ime';
+                if (v == null || v.trim().isEmpty) {
+                  return 'Molimo unesite korisničko ime';
+                }
                 if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(v)) {
                   return 'Samo slova, brojeve i _ (bez razmaka ili specijalnih znakova)';
                 }
@@ -331,14 +352,19 @@ class _WelcomePageState extends State<WelcomePage> {
               decoration: _loginStyleDecoration('Lozinka').copyWith(
                 suffixIcon: IconButton(
                   icon: Icon(
-                    _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                    _obscurePassword
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
                   ),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                  onPressed: () =>
+                      setState(() => _obscurePassword = !_obscurePassword),
                 ),
               ),
               validator: (v) {
                 if (v == null || v.isEmpty) return 'Molimo unesite lozinku';
-                if (v.length < 6) return 'Lozinka mora imati najmanje 6 karaktera';
+                if (v.length < 6) {
+                  return 'Lozinka mora imati najmanje 6 karaktera';
+                }
                 return null;
               },
             ),
@@ -350,13 +376,18 @@ class _WelcomePageState extends State<WelcomePage> {
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: IconButton(
                   icon: Icon(
-                    _obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                    _obscureConfirm
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
                   ),
-                  onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                  onPressed: () =>
+                      setState(() => _obscureConfirm = !_obscureConfirm),
                 ),
               ),
               validator: (v) {
-                if (v != _passwordController.text) return 'Lozinke se ne poklapaju';
+                if (v != _passwordController.text) {
+                  return 'Lozinke se ne poklapaju';
+                }
                 return null;
               },
             ),
@@ -380,7 +411,7 @@ class _WelcomePageState extends State<WelcomePage> {
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(12),
-                  onTap: _isLoading ? null : () => _handleCreateAccount(),
+                  onTap: _isLoading ? null : _handleCreateAccount,
                   child: Center(
                     child: _isLoading
                         ? const SizedBox(
@@ -410,12 +441,12 @@ class _WelcomePageState extends State<WelcomePage> {
                 Text(
                   'Već imate račun? ',
                   style: TextStyle(
-                    color: isDarkMode ? AppTheme.textSecondary : Colors.grey.shade600,
+                    color: AppColors.of(isDarkMode).secondaryText,
                     fontSize: 14,
                   ),
                 ),
                 TextButton(
-                  onPressed: () => Navigator.pushNamed(context, '/login'),
+                  onPressed: () => Navigator.pushNamed(context, Routes.login),
                   child: const Text(
                     'Prijavite se',
                     style: TextStyle(

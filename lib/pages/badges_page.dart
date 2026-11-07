@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../config/routes.dart';
 import '../models/radio_player_model.dart';
-import '../widgets/badge_info_modal.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../widgets/badge_info_modal.dart';
 import '../widgets/common_footer.dart';
+import '../widgets/gradient_card.dart';
 
 class BadgesPage extends StatefulWidget {
   const BadgesPage({super.key});
@@ -14,12 +18,13 @@ class BadgesPage extends StatefulWidget {
 }
 
 class _BadgesPageState extends State<BadgesPage> {
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<RadioPlayerModel>().trackPageVisit('/badges');
+      if (mounted) {
+        context.read<RadioPlayerModel>().trackPageVisit(Routes.badges);
+      }
     });
   }
 
@@ -40,24 +45,18 @@ class _BadgesPageState extends State<BadgesPage> {
     final model = context.watch<RadioPlayerModel>();
     final themeProvider = context.watch<ThemeProvider>();
     final isDarkMode = themeProvider.isDarkMode;
-    final earnedBadges = model.earnedBadges;
-    final allBadges = model.allBadges;
+    final earned = model.earnedAchievements;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text(
-          'Značke',
-          style: TextStyle(
-            color: isDarkMode ? Colors.white : null,
-          ),
-        ),
-        backgroundColor: isDarkMode ? Colors.transparent : null,
-        elevation: isDarkMode ? 0 : null,
+        title: const Text('Značke'),
         leading: IconButton(
           icon: Icon(
             Icons.chevron_left,
-            color: isDarkMode ? Colors.white : Theme.of(context).colorScheme.primary,
+            color: isDarkMode
+                ? Colors.white
+                : Theme.of(context).colorScheme.primary,
             size: 32,
           ),
           onPressed: () => Navigator.pop(context),
@@ -66,73 +65,71 @@ class _BadgesPageState extends State<BadgesPage> {
           IconButton(
             icon: Icon(
               Icons.info_outline,
-              color: isDarkMode ? Colors.white : Theme.of(context).colorScheme.primary,
+              color: isDarkMode
+                  ? Colors.white
+                  : Theme.of(context).colorScheme.primary,
             ),
-            onPressed: () => _showBadgeExplanationModal(),
+            onPressed: _showBadgeExplanationModal,
           ),
         ],
       ),
-      body: Container(
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header Stats
-                _buildStatsCard(earnedBadges.length, allBadges.length),
-                const SizedBox(height: 24),
-                
-                // Earned Badges Section
-                if (earnedBadges.isNotEmpty) ...[
-                  _buildSectionTitle('Osvojene Značke', earnedBadges.length, isDarkMode),
-                  const SizedBox(height: 16),
-                  _buildBadgesGrid(earnedBadges, true, isDarkMode),
-                  const SizedBox(height: 32),
-                ],
-                
-                // All Badges by Section
-                ...model.badgesGroupedBySection.entries.map((sectionEntry) {
-                  final sectionName = sectionEntry.key;
-                  final sectionBadges = sectionEntry.value;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    key: ValueKey(sectionName),
-                    children: [
-                      _buildSectionTitle(sectionName, sectionBadges.length, isDarkMode),
-                      const SizedBox(height: 16),
-                      _buildBadgesGridWithEarned(sectionBadges, earnedBadges, isDarkMode),
-                      const SizedBox(height: 24),
-                    ],
-                  );
-                }),
-                const SizedBox(height: 120), // Space for bottom nav
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Stats
+              _buildStatsCard(earned.length, model.allAchievements.length),
+              const SizedBox(height: 24),
+
+              // Earned Badges Section
+              if (earned.isNotEmpty) ...[
+                _buildSectionTitle(
+                  'Osvojene Značke',
+                  earned.length,
+                  isDarkMode,
+                ),
+                const SizedBox(height: 16),
+                _buildBadgesGrid([
+                  for (final e in earned) e.achievement,
+                ], isDarkMode),
+                const SizedBox(height: 32),
               ],
-            ),
+
+              // All Badges by Section
+              for (final MapEntry(key: category, value: badges)
+                  in model.achievementsByCategory.entries)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  key: ValueKey(category),
+                  children: [
+                    _buildSectionTitle(
+                      category.title,
+                      badges.length,
+                      isDarkMode,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildBadgesGrid(badges, isDarkMode),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              const SizedBox(height: 120), // Space for bottom nav
+            ],
           ),
         ),
       ),
-      bottomNavigationBar: CommonFooter(currentRoute: '/badges', isDark: isDarkMode),
+      bottomNavigationBar: CommonFooter(
+        currentRoute: Routes.badges,
+        isDark: isDarkMode,
+      ),
     );
   }
 
   Widget _buildStatsCard(int earned, int total) {
     final percentage = total > 0 ? (earned / total * 100).round() : 0;
-    
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: AppTheme.primaryGradient,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryWithOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
+
+    return GradientCard(
       child: Column(
         children: [
           Row(
@@ -205,7 +202,7 @@ class _BadgesPageState extends State<BadgesPage> {
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w700,
-            color: isDarkMode ? AppTheme.textPrimary : const Color(0xFF1F2937),
+            color: AppColors.of(isDarkMode).primaryText,
           ),
         ),
         const SizedBox(width: 8),
@@ -228,7 +225,8 @@ class _BadgesPageState extends State<BadgesPage> {
     );
   }
 
-  Widget _buildBadgesGrid(List<Map<String, dynamic>> badges, bool isEarned, bool isDarkMode) {
+  Widget _buildBadgesGrid(List<Achievement> badges, bool isDarkMode) {
+    final model = context.watch<RadioPlayerModel>();
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -241,52 +239,35 @@ class _BadgesPageState extends State<BadgesPage> {
       itemCount: badges.length,
       itemBuilder: (context, index) {
         final badge = badges[index];
-        return _buildBadgeCard(badge, isEarned, isDarkMode);
+        return _buildBadgeCard(badge, model.hasAchievement(badge), isDarkMode);
       },
     );
   }
 
-  Widget _buildBadgesGridWithEarned(List<Map<String, dynamic>> badges, List<Map<String, dynamic>> earnedBadges, bool isDarkMode) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 0.65,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-      ),
-      itemCount: badges.length,
-      itemBuilder: (context, index) {
-        final badge = badges[index];
-        final isEarned = earnedBadges.any((earned) => earned['id'] == badge['id']);
-        return _buildBadgeCard(badge, isEarned, isDarkMode);
-      },
-    );
-  }
+  Widget _buildBadgeCard(Achievement badge, bool isEarned, bool isDarkMode) {
+    final badgeColor = badge.color;
 
-  Widget _buildBadgeCard(Map<String, dynamic> badge, bool isEarned, bool isDarkMode) {
-    final badgeColor = Color(badge['color'] as int);
-    
     return Container(
       decoration: BoxDecoration(
-        color: isEarned 
-          ? (isDarkMode ? AppTheme.cardBackground : Colors.white)
-          : (isDarkMode ? AppTheme.background : Colors.grey.shade50),
+        color: isEarned
+            ? (AppColors.of(isDarkMode).card)
+            : (isDarkMode ? AppTheme.background : Colors.grey.shade50),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isEarned 
+          color: isEarned
               ? badgeColor.withValues(alpha: 0.3)
-              : (isDarkMode ? AppTheme.cardBorder : Colors.grey.shade200),
+              : (AppColors.of(isDarkMode).border),
           width: 2,
         ),
-        boxShadow: isEarned ? [
-          BoxShadow(
-            color: badgeColor.withValues(alpha: 0.2),
-            blurRadius: 15,
-            offset: const Offset(0, 6),
-          ),
-        ] : null,
+        boxShadow: isEarned
+            ? [
+                BoxShadow(
+                  color: badgeColor.withValues(alpha: 0.2),
+                  blurRadius: 15,
+                  offset: const Offset(0, 6),
+                ),
+              ]
+            : null,
       ),
       child: Material(
         color: Colors.transparent,
@@ -304,47 +285,47 @@ class _BadgesPageState extends State<BadgesPage> {
                   width: 50,
                   height: 50,
                   decoration: BoxDecoration(
-                    color: isEarned 
+                    color: isEarned
                         ? badgeColor.withValues(alpha: 0.1)
-                        : (isDarkMode ? AppTheme.backgroundMedium : Colors.grey.shade100),
+                        : (isDarkMode
+                              ? AppTheme.backgroundMedium
+                              : Colors.grey.shade100),
                     shape: BoxShape.circle,
                   ),
                   child: Center(
                     child: Text(
-                      badge['icon'] as String,
+                      badge.icon,
                       style: TextStyle(
                         fontSize: 24,
-                        color: isEarned ? null : (isDarkMode ? AppTheme.textSecondary : Colors.grey.shade400),
+                        color: isEarned
+                            ? null
+                            : (AppColors.of(isDarkMode).mutedText),
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 8),
-                
+
                 // Badge name
                 Expanded(
                   child: Text(
-                    badge['name'] as String,
+                    badge.name,
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: isEarned 
-                        ? (isDarkMode ? AppTheme.textPrimary : const Color(0xFF1F2937)) 
-                        : (isDarkMode ? AppTheme.textSecondary : Colors.grey.shade500),
+                      color: isEarned
+                          ? (AppColors.of(isDarkMode).primaryText)
+                          : (AppColors.of(isDarkMode).mutedText),
                     ),
                     textAlign: TextAlign.center,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                
+
                 if (isEarned) ...[
                   const SizedBox(height: 6),
-                  Icon(
-                    Icons.check_circle,
-                    color: badgeColor,
-                    size: 16,
-                  ),
+                  Icon(Icons.check_circle, color: badgeColor, size: 16),
                 ],
               ],
             ),
@@ -354,9 +335,15 @@ class _BadgesPageState extends State<BadgesPage> {
     );
   }
 
-  void _showBadgeDetails(Map<String, dynamic> badge, bool isEarned, bool isDarkMode) {
-    final badgeColor = Color(badge['color'] as int);
-    
+  void _showBadgeDetails(Achievement badge, bool isEarned, bool isDarkMode) {
+    final badgeColor = badge.color;
+    final earnedAt = context
+        .read<RadioPlayerModel>()
+        .earnedAchievements
+        .where((e) => e.id == badge.id)
+        .firstOrNull
+        ?.earnedAt;
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -365,7 +352,11 @@ class _BadgesPageState extends State<BadgesPage> {
           padding: const EdgeInsets.all(28),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [AppTheme.primary, AppTheme.primaryDark, AppTheme.accentDark],
+              colors: [
+                AppTheme.primary,
+                AppTheme.primaryDark,
+                AppTheme.accentDark,
+              ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -385,7 +376,9 @@ class _BadgesPageState extends State<BadgesPage> {
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
-                  color: isEarned ? badgeColor : Colors.white.withValues(alpha: 0.25),
+                  color: isEarned
+                      ? badgeColor
+                      : Colors.white.withValues(alpha: 0.25),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
@@ -396,19 +389,21 @@ class _BadgesPageState extends State<BadgesPage> {
                   ],
                 ),
                 child: Center(
-                  child: Text(
-                    badge['icon'] as String,
-                    style: const TextStyle(fontSize: 40),
-                  ),
+                  child: Text(badge.icon, style: const TextStyle(fontSize: 40)),
                 ),
               ),
               const SizedBox(height: 16),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Text(
                   isEarned ? 'Osvojeno' : 'Zaključano',
@@ -421,7 +416,7 @@ class _BadgesPageState extends State<BadgesPage> {
               ),
               const SizedBox(height: 16),
               Text(
-                badge['name'] as String,
+                badge.name,
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
@@ -431,7 +426,7 @@ class _BadgesPageState extends State<BadgesPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                badge['description'] as String,
+                badge.description,
                 style: TextStyle(
                   fontSize: 16,
                   color: Colors.white.withValues(alpha: 0.95),
@@ -440,10 +435,10 @@ class _BadgesPageState extends State<BadgesPage> {
                 ),
                 textAlign: TextAlign.center,
               ),
-              if (isEarned && badge.containsKey('earnedDate')) ...[
+              if (earnedAt != null) ...[
                 const SizedBox(height: 16),
                 Text(
-                  'Osvojeno ${_formatDate(badge['earnedDate'] as String)}',
+                  'Osvojeno ${_formatDate(earnedAt)}',
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.white.withValues(alpha: 0.9),
@@ -477,19 +472,17 @@ class _BadgesPageState extends State<BadgesPage> {
     );
   }
 
-  String _formatDate(String isoDate) {
-    final date = DateTime.parse(isoDate);
+  /// "danas", "juče", "prije 3 dana" or the date.
+  String _formatDate(DateTime date) {
     final now = DateTime.now();
-    final difference = now.difference(date);
-    
-    if (difference.inDays == 0) {
-      return 'danas';
-    } else if (difference.inDays == 1) {
-      return 'juče';
-    } else if (difference.inDays < 7) {
-      return 'pre ${difference.inDays} dana';
-    } else {
-      return '${date.day}.${date.month}.${date.year}';
-    }
+    final days = DateTime.utc(
+      now.year,
+      now.month,
+      now.day,
+    ).difference(DateTime.utc(date.year, date.month, date.day)).inDays;
+    if (days <= 0) return 'danas';
+    if (days == 1) return 'juče';
+    if (days < 7) return 'prije $days dana';
+    return '${date.day}.${date.month}.${date.year}.';
   }
 }

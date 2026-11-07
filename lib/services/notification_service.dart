@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
+import '../config/routes.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -8,12 +9,16 @@ class NotificationService {
   NotificationService._();
   static final instance = NotificationService._();
   final _plugin = FlutterLocalNotificationsPlugin();
+
   /// Daily reminders. One per day, in rotation (20 days, then again).
   static const List<(String, String)> dailyMessages = [
     ('Pogodi šta upravo svira 🎶', 'Imamo osjećaj da će ti se svidjeti…'),
     ('Ovo nisi očekivao/la danas 👀', 'Uključi se i saznaj zašto svi slušaju.'),
     ('Tvoj niz je u opasnosti 🔥', 'Samo 5 minuta danas i niz ostaje živ!'),
-    ('Fali ti samo malo do nove značke 🏅', 'Uključi radio i provjeri koja te čeka.'),
+    (
+      'Fali ti samo malo do nove značke 🏅',
+      'Uključi radio i provjeri koja te čeka.',
+    ),
     ('Ovo je tvoj trenutak', 'Isključi buku, uključi Feniks. Zaslužio/la si.'),
     ('Tvoji bodovi te čekaju', 'Svaki minut slušanja = 2 boda. Hajde po njih!'),
     ('Popravi dan za 3, 2, 1…', 'Jedan klik i Feniks je s tobom.'),
@@ -23,13 +28,25 @@ class NotificationService {
     ('Ovo moraš čuti 🔊', 'Hitovi izabrani baš za tebe!'),
     ('Tvoja dnevna doza ljubavi 💛', 'Spremna je i čeka samo tebe.'),
     ('Kladimo se da ćeš se nasmijati 😊', 'Pet minuta Feniksa i vidjećeš.'),
-    ('Ljestvica se mrda 📈', 'Svaki minut slušanja te gura naprijed. Gdje si ti?'),
-    ('Hej, nedostaješ nam! 💛', 'Feniks nije isti bez tebe. Svrati na jednu pjesmu.'),
-    ('Skupljaš li značke? 🏆', 'Neke se otključavaju samo slušanjem. Spreman/na?'),
+    (
+      'Ljestvica se mrda 📈',
+      'Svaki minut slušanja te gura naprijed. Gdje si ti?',
+    ),
+    (
+      'Hej, nedostaješ nam! 💛',
+      'Feniks nije isti bez tebe. Svrati na jednu pjesmu.',
+    ),
+    (
+      'Skupljaš li značke? 🏆',
+      'Neke se otključavaju samo slušanjem. Spreman/na?',
+    ),
     ('Pauza samo za tebe ☕', 'Kafa, Feniks i pet minuta mira.'),
     ('Dobre vijesti stižu 📻', 'Na Feniksu samo one. Uključi se.'),
     ('Ne skrolaj, slušaj Feniks! 🎶', 'Daj očima odmor, a ušima nešto lijepo.'),
-    ('Vikend raspoloženje, bilo koji dan 🎉', 'Pojačaj Feniks i osjeti razliku.'),
+    (
+      'Vikend raspoloženje, bilo koji dan 🎉',
+      'Pojačaj Feniks i osjeti razliku.',
+    ),
   ];
 
   Future<void> init() async {
@@ -56,7 +73,7 @@ class NotificationService {
       onDidReceiveNotificationResponse: (resp) {
         // Open the player when the user taps the reminder
         navigatorKey.currentState?.pushNamedAndRemoveUntil(
-          '/home',
+          Routes.home,
           (route) => false,
         );
       },
@@ -107,7 +124,7 @@ class NotificationService {
     return true;
   }
 
-  Future<void> cancelDailyReminder() async {
+  Future<void> cancelDailyReminders() async {
     for (var i = 0; i < _daysScheduledAhead; i++) {
       await _plugin.cancel(_firstReminderId + i);
     }
@@ -115,20 +132,22 @@ class NotificationService {
 
   /// Which message is shown on a given day (rotates through all of them).
   static (String, String) messageForDay(DateTime day) {
-    final dayNumber = DateTime.utc(day.year, day.month, day.day)
-        .difference(DateTime.utc(2024, 1, 1))
-        .inDays;
+    final dayNumber = DateTime.utc(
+      day.year,
+      day.month,
+      day.day,
+    ).difference(DateTime.utc(2024, 1, 1)).inDays;
     return dailyMessages[dayNumber % dailyMessages.length];
   }
 
   /// Schedules one reminder per day at [hour]:[minute] for the next 30 days,
   /// each with the message of that day. Called again on every app start, so
   /// the schedule keeps rolling forward (and stays right after DST changes).
-  Future<void> scheduleDailyGoodNews({
+  Future<void> scheduleDailyReminders({
     required int hour,
     required int minute,
   }) async {
-    await cancelDailyReminder(); // replace existing
+    await cancelDailyReminders(); // replace existing
 
     const androidDetails = AndroidNotificationDetails(
       'feniks_daily',
