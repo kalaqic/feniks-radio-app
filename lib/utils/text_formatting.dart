@@ -19,6 +19,43 @@ class TextFormatting {
     return result;
   }
 
+  /// Words that only describe the upload, not the song: "(Official Music
+  /// Video)", "[HD]", "(audio 2011)", "| Lyrics" and the like.
+  static final _junk = RegExp(
+    r'\b(official|oficijaln\w*|music\s*video|video\s*clip|videoclip|'
+    r'video|spot|audio|lyrics?|tekst|hd|hq|4k|1080p|720p|'
+    r'visuali[sz]er|remaster(ed)?|full\s*album)\b',
+    caseSensitive: false,
+  );
+  static final _bracketed = RegExp(r'\s*[(\[{]([^)\]}]*)[)\]}]');
+  static final _yearOnly = RegExp(r'^\s*(19|20)\d{2}\s*$');
+  static final _junkAtEnd = RegExp(
+    r'(\s*[-|/•]\s*|\s+)(official\s+(music\s+)?video|official\s+audio|'
+    r'music\s+video|lyrics?(\s+video)?|video|audio|hd|hq|4k)\s*$',
+    caseSensitive: false,
+  );
+  static final _dangling = RegExp(r'[\s\-|/•]+$');
+
+  /// Removes upload labels from a song title or artist. Brackets with
+  /// anything else, such as "(feat. X)", "(Live)" or "(Remix)", stay.
+  static String cleanSongText(String text) {
+    var result = text.replaceAllMapped(_bracketed, (m) {
+      final inside = m[1]!;
+      final junk =
+          inside.trim().isEmpty ||
+          _junk.hasMatch(inside) ||
+          _yearOnly.hasMatch(inside);
+      return junk ? '' : m[0]!;
+    });
+    String before;
+    do {
+      before = result;
+      result = result.replaceAll(_junkAtEnd, '').replaceAll(_dangling, '');
+    } while (result != before);
+    result = result.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+    return result.isEmpty ? text.trim() : result;
+  }
+
   static String formatTitle(String title) {
     if (title.isEmpty) return title;
 

@@ -7,17 +7,23 @@ import '../config/routes.dart';
 import '../models/radio_player_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
-import '../theme/theme_provider.dart';
 import '../utils/log.dart';
 import '../widgets/badge_earned_modal.dart';
 import '../widgets/badges_card.dart';
 import '../widgets/celebration_modal.dart';
 import '../widgets/common_footer.dart';
 import '../widgets/currently_playing_card.dart';
-import '../widgets/header_with_volume.dart';
+import '../widgets/header_player.dart';
+import '../widgets/ui.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.fromLanding = false});
+
+  /// Route argument that marks the opening right after the landing screen.
+  static const landingArgument = 'fromLanding';
+
+  /// Plays the long entrance animation that continues the landing screen.
+  final bool fromLanding;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -54,6 +60,8 @@ class _HomePageState extends State<HomePage> {
       }
 
       if (!mounted) return;
+      // Badges are only unlocked for logged-in users.
+      if (!auth.isAuthenticated) model.achievementsEnabled = false;
       model.trackPageVisit(Routes.home);
 
       model.onAchievementEarned = (earned) {
@@ -68,6 +76,12 @@ class _HomePageState extends State<HomePage> {
         });
       }
 
+      // Let the entrance animation finish before any popup covers it.
+      if (widget.fromLanding) {
+        await Future<void>.delayed(const Duration(milliseconds: 1800));
+        if (!mounted) return;
+      }
+
       if (model.shouldShowCelebration) {
         _showCelebrationModal();
       } else {
@@ -77,16 +91,21 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showCelebrationModal() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => CelebrationModal(
-        onDismiss: () async {
-          final model = context.read<RadioPlayerModel>();
+    final model = context.read<RadioPlayerModel>();
+    Haptics.play(Haptic.light);
+    showAppDialog<void>(
+      context,
+      dismissible: false,
+      builder: (dialogContext) => CelebrationModal(
+        onContinue: () async {
           model.markCelebrationShown();
-          Navigator.of(context).pop();
-          await model.play();
-
+          Navigator.of(dialogContext).pop();
+          if (!model.playing) await model.play();
+          _showNextPendingAchievement();
+        },
+        onClose: () {
+          model.markCelebrationShown();
+          Navigator.of(dialogContext).pop();
           _showNextPendingAchievement();
         },
       ),
@@ -103,9 +122,11 @@ class _HomePageState extends State<HomePage> {
     Achievement achievement, {
     bool thenShowNext = false,
   }) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
+    // A badge is a reward: two quick taps.
+    Haptics.play(Haptic.success);
+    showAppDialog<void>(
+      context,
+      dismissible: false,
       builder: (dialogContext) => BadgeEarnedModal(
         badge: achievement,
         onDismiss: () {
@@ -123,33 +144,39 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final model = context.watch<RadioPlayerModel>();
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDarkMode = themeProvider.isDarkMode;
+    final colors = colorsOf(context);
+    final landing = widget.fromLanding;
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: const HeaderWithVolume(),
-      backgroundColor: Colors.transparent,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const SizedBox(
-              height: 270,
+      backgroundColor: colors.background,
+      body: Column(
+        children: [
+          HeaderPlayer(entrance: landing),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+              child: Column(
+                children: [
+                  FadeSlideIn(
+                    delay: Duration(milliseconds: landing ? 1150 : 40),
+                    duration: const Duration(milliseconds: 800),
+                    offset: Offset(landing ? -420 : -60, 0),
+                    child: const CurrentlyPlayingCard(),
+                  ),
+                  const SizedBox(height: 16),
+                  FadeSlideIn(
+                    delay: Duration(milliseconds: landing ? 1350 : 140),
+                    duration: const Duration(milliseconds: 800),
+                    offset: Offset(landing ? 420 : 60, 0),
+                    child: const BadgesCard(),
+                  ),
+                ],
+              ),
             ),
-            CurrentlyPlayingCard(model: model),
-            const SizedBox(height: 24),
-            const BadgesCard(),
-            const SizedBox(height: 140),
-          ],
-        ),
+          ),
+        ],
       ),
-      bottomNavigationBar: CommonFooter(
-        currentRoute: Routes.home,
-        isDark: isDarkMode,
-      ),
+      bottomNavigationBar: const CommonFooter(currentRoute: Routes.home),
     );
   }
 }

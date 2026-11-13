@@ -6,9 +6,7 @@ import 'package:provider/provider.dart';
 import '../config/routes.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
-import '../theme/app_colors.dart';
-import '../theme/app_theme.dart';
-import '../theme/theme_provider.dart';
+import '../widgets/ui.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -80,106 +78,59 @@ class _LoginPageState extends State<LoginPage> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    Haptics.play(Haptic.warning);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDarkMode = themeProvider.isDarkMode;
+    final colors = colorsOf(context);
 
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
+    return Form(
+      key: _formKey,
+      child: StripedPage(
+        top: 24,
+        horizontal: 28,
+        gap: 28,
+        children: [
+          FadeSlideIn(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Image.asset(
+                'lib/assets/png/horizontal_logo.png',
+                width: 96,
+              ),
+            ),
+          ),
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 80),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 40),
-
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppTheme.primary, AppTheme.primaryDark],
-                    ),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primaryWithOpacity(0.3),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.radio, color: Colors.white, size: 50),
-                ),
-                const SizedBox(height: 24),
-
-                Text(
-                  'Prijava',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.of(isDarkMode).primaryText,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+                const PageTitle('Prijavi se'),
                 const SizedBox(height: 8),
                 Text(
-                  'Unesite korisničko ime i lozinku',
+                  'Skupljaj poene, značke i omiljene pjesme na svom nalogu.',
                   style: TextStyle(
                     fontSize: 16,
-                    color: AppColors.of(isDarkMode).secondaryText,
+                    height: 1.55,
+                    color: colors.text,
                   ),
-                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 40),
-
-                TextFormField(
+              ],
+            ),
+          ),
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 160),
+            child: Column(
+              children: [
+                LabeledField(
+                  label: 'Korisničko ime',
                   controller: _usernameController,
-                  textCapitalization: TextCapitalization.none,
-                  autocorrect: false,
-                  decoration: InputDecoration(
-                    labelText: 'Korisničko ime',
-                    prefixIcon: const Icon(Icons.person_outline),
-                    filled: true,
-                    fillColor: AppColors.of(isDarkMode).card,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: AppColors.of(isDarkMode).border,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: AppColors.of(isDarkMode).border,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(
-                        color: AppTheme.primary,
-                        width: 2,
-                      ),
-                    ),
-                  ),
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.username],
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Molimo unesite korisničko ime';
@@ -187,45 +138,18 @@ class _LoginPageState extends State<LoginPage> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
-
-                TextFormField(
+                const SizedBox(height: 22),
+                LabeledField(
+                  label: 'Lozinka',
                   controller: _passwordController,
                   obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Lozinka',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                      ),
-                      onPressed: () {
-                        setState(() => _obscurePassword = !_obscurePassword);
-                      },
-                    ),
-                    filled: true,
-                    fillColor: AppColors.of(isDarkMode).card,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: AppColors.of(isDarkMode).border,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: AppColors.of(isDarkMode).border,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(
-                        color: AppTheme.primary,
-                        width: 2,
-                      ),
-                    ),
+                  textInputAction: TextInputAction.done,
+                  autofillHints: const [AutofillHints.password],
+                  onSubmitted: (_) => _isLoading ? null : _handleSubmit(),
+                  trailing: _ShowToggle(
+                    obscured: _obscurePassword,
+                    onTap: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -237,81 +161,72 @@ class _LoginPageState extends State<LoginPage> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 24),
-
-                Container(
-                  height: 56,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppTheme.primary, AppTheme.primaryDark],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primaryWithOpacity(0.3),
-                        blurRadius: 15,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: _isLoading ? null : _handleSubmit,
-                      child: Center(
-                        child: _isLoading
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text(
-                                'Prijavi se',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Nemate nalog? ',
-                      style: TextStyle(
-                        color: AppColors.of(isDarkMode).secondaryText,
-                        fontSize: 14,
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pushNamedAndRemoveUntil(
-                        context,
-                        Routes.loading,
-                        (route) => false,
-                      ),
-                      child: const Text(
-                        'Napravite ga',
-                        style: TextStyle(
-                          color: AppTheme.primary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 40),
               ],
             ),
+          ),
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 240),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+                children: [
+                  PillButton(
+                    label: 'Prijavi se',
+                    height: 54,
+                    fontSize: 16,
+                    loading: _isLoading,
+                    onPressed: _handleSubmit,
+                  ),
+                  const SizedBox(height: 18),
+                  TextLink(
+                    'Nemaš nalog? Napravi ga',
+                    padding: EdgeInsets.zero,
+                    onTap: () => Navigator.pushNamed(context, Routes.welcome),
+                  ),
+                  const SizedBox(height: 18),
+                  TextLink(
+                    'Nastavi slušati bez prijave',
+                    muted: true,
+                    fontSize: 13,
+                    padding: EdgeInsets.zero,
+                    onTap: () => Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      Routes.home,
+                      (route) => false,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Prikaži / Sakrij" next to a password field.
+class _ShowToggle extends StatelessWidget {
+  const _ShowToggle({required this.obscured, required this.onTap});
+
+  final bool obscured;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    return Pressable(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          obscured ? 'Prikaži' : 'Sakrij',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w400,
+            color: colors.ink,
+            decoration: TextDecoration.underline,
+            decorationColor: colors.ink,
           ),
         ),
       ),

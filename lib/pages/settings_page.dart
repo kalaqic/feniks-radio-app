@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -5,10 +7,13 @@ import 'package:url_launcher/url_launcher.dart';
 import '../config/app_config.dart';
 import '../config/routes.dart';
 import '../models/radio_player_model.dart';
+import '../services/auth_service.dart';
+import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
-import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../utils/log.dart';
+import '../widgets/ui.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -18,8 +23,6 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  bool get _isDarkMode => context.watch<ThemeProvider>().isDarkMode;
-
   @override
   void initState() {
     super.initState();
@@ -30,535 +33,277 @@ class _SettingsPageState extends State<SettingsPage> {
     });
   }
 
+  void _snack(String text) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  String _two(int n) => n.toString().padLeft(2, '0');
+
   @override
   Widget build(BuildContext context) {
+    final colors = colorsOf(context);
     final model = context.watch<RadioPlayerModel>();
     final themeProvider = context.watch<ThemeProvider>();
+    final auth = context.watch<AuthService>();
+    var delay = 0;
+    Duration next() => Duration(milliseconds: delay += 40);
 
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        leading: IconButton(
-          padding: const EdgeInsets.only(left: 12),
-          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-          icon: const Icon(Icons.chevron_left_rounded, size: 28),
-
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Postavke'),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 20),
-
-              _buildSettingSection(
-                title: 'Izgled',
-                icon: Icons.palette_outlined,
-                iconColors: [AppTheme.primary, AppTheme.primaryDark],
-                children: [
-                  _buildToggleSetting(
-                    'Tamni režim',
-                    'Aktiviraj tamnu temu za lakše korišćenje noću',
-                    Icons.dark_mode_outlined,
-                    _isDarkMode,
-                    themeProvider.toggleTheme,
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 20),
-
-              _buildSettingSection(
-                title: 'Notifikacije',
-                icon: Icons.notifications_outlined,
-                iconColors: [const Color(0xFF6366F1), const Color(0xFF8B5CF6)],
-                children: [
-                  _buildToggleSetting(
-                    'Omogući notifikacije',
-                    'Dobij podsjetnik da se uključiš u program i slušaš uživo',
-                    Icons.notifications_active_outlined,
-                    model.notificationsEnabled,
-                    (value) => _setNotificationsEnabled(model, value),
-                  ),
-                  if (model.notificationsEnabled) ...[
-                    const SizedBox(height: 16),
-                    _buildNotificationTimePicker(model),
-                  ],
-                ],
-              ),
-
-              const SizedBox(height: 20),
-
-              _buildSettingSection(
-                title: 'Audio',
-                icon: Icons.volume_up_outlined,
-                iconColors: [const Color(0xFF10B981), const Color(0xFF059669)],
-                children: [
-                  _buildToggleSetting(
-                    'Automatsko puštanje',
-                    'Počni reprodukciju čim se otvori aplikacija',
-                    Icons.play_circle_outline,
-                    model.autoPlay,
-                    (value) => model.autoPlay = value,
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 20),
-
-              _buildSettingSection(
-                title: 'O aplikaciji',
-                icon: Icons.info_outline,
-                iconColors: [const Color(0xFF8E8E93), const Color(0xFFA8A8A8)],
-                children: [
-                  _buildInfoSetting(
-                    'Verzija',
-                    AppConfig.appVersion,
-                    Icons.system_update_outlined,
-                    null,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildInfoSetting(
-                    'Podrška',
-                    AppConfig.supportEmail,
-                    Icons.email_outlined,
-                    _openEmailSupport,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildInfoSetting(
-                    'Ostavi feedback',
-                    'Predloži ideju',
-                    Icons.lightbulb_outline,
-                    _openFeedbackEmail,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildInfoSetting(
-                    'Uslovi korišćenja',
-                    'Prikaži',
-                    Icons.description_outlined,
-                    _showTermsOfService,
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-              _buildBackToProfileButton(_isDarkMode),
-              const SizedBox(height: 40),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSettingSection({
-    required String title,
-    required IconData icon,
-    required List<Color> iconColors,
-    required List<Widget> children,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: iconColors),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: Colors.white, size: 18),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ...children,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildToggleSetting(
-    String title,
-    String subtitle,
-    IconData icon,
-    bool value,
-    Function(bool) onChanged,
-  ) {
-    return Row(
+    return StripedPage(
+      gap: 12,
       children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: value
-                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                : Theme.of(context).colorScheme.surfaceContainerHighest,
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            icon,
-            color: value
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.outline,
-            size: 16,
-          ),
+        const FadeSlideIn(child: BackLink('Nazad na profil')),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: FadeSlideIn(delay: next(), child: const PageTitle('Postavke')),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        if (!auth.isAuthenticated)
+          FadeSlideIn(delay: next(), child: const _SignInNotice()),
+        FadeSlideIn(delay: next(), child: const SectionLabel('Izgled')),
+        FadeSlideIn(
+          delay: next(),
+          child: _Block(
             children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.6),
-                ),
+              _SwitchRow(
+                title: 'Tamni režim',
+                subtitle: 'Lakše za oči tokom noći',
+                value: themeProvider.isDarkMode,
+                onChanged: themeProvider.toggleTheme,
               ),
             ],
           ),
         ),
-        Switch.adaptive(
-          value: value,
-          onChanged: onChanged,
-          activeColor: Theme.of(context).colorScheme.primary,
+        FadeSlideIn(
+          delay: next(),
+          child: const Padding(
+            padding: EdgeInsets.only(top: 12),
+            child: SectionLabel('Notifikacije'),
+          ),
         ),
+        FadeSlideIn(
+          delay: next(),
+          child: _Block(
+            children: [
+              _SwitchRow(
+                title: 'Dnevni podsjetnik',
+                subtitle: 'Jedna kratka poruka dnevno da se uključiš',
+                value: model.notificationsEnabled,
+                onChanged: (value) => _setNotificationsEnabled(model, value),
+              ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: model.notificationsEnabled
+                    ? _TimeRow(
+                        time:
+                            '${_two(model.notificationHour)}:'
+                            '${_two(model.notificationMinute)}',
+                        onEarlier: () => _shiftReminder(model, -15),
+                        onLater: () => _shiftReminder(model, 15),
+                      )
+                    : const SizedBox(width: double.infinity),
+              ),
+            ],
+          ),
+        ),
+        FadeSlideIn(
+          delay: next(),
+          child: const Padding(
+            padding: EdgeInsets.only(top: 12),
+            child: SectionLabel('Audio'),
+          ),
+        ),
+        FadeSlideIn(
+          delay: next(),
+          child: _Block(
+            children: [
+              _SwitchRow(
+                title: 'Automatsko puštanje',
+                subtitle: 'Radio kreće čim otvoriš aplikaciju',
+                value: model.autoPlay,
+                onChanged: (value) => model.autoPlay = value,
+              ),
+            ],
+          ),
+        ),
+        FadeSlideIn(
+          delay: next(),
+          child: const Padding(
+            padding: EdgeInsets.only(top: 12),
+            child: SectionLabel('O aplikaciji'),
+          ),
+        ),
+        FadeSlideIn(
+          delay: next(),
+          child: _Block(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 18,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Verzija',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w400,
+                          color: colors.ink,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      AppConfig.appVersion,
+                      style: TextStyle(fontSize: 15, color: colors.muted),
+                    ),
+                  ],
+                ),
+              ),
+              NavRow(
+                label: 'Podrška putem emaila',
+                onTap: _openEmailSupport,
+              ),
+              NavRow(
+                label: 'Ostavi feedback ili predloži ideju',
+                onTap: _openFeedbackEmail,
+              ),
+              NavRow(label: 'Uslovi korištenja', onTap: _showTermsOfService),
+            ],
+          ),
+        ),
+        if (auth.isAuthenticated) ...[
+          FadeSlideIn(
+            delay: next(),
+            child: const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: SectionLabel('Nalog'),
+            ),
+          ),
+          FadeSlideIn(
+            delay: next(),
+            child: _Block(
+              children: [
+                NavRow(
+                  label: 'Promijeni lozinku',
+                  showDivider: false,
+                  onTap: () =>
+                      Navigator.pushNamed(context, Routes.changePassword),
+                ),
+                _ActionRow(label: 'Odjavi se', onTap: () => _logout(auth)),
+                _ActionRow(
+                  label: 'Obriši nalog',
+                  color: AppTheme.raspberry,
+                  onTap: () => _confirmDeleteAccount(auth),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
 
-  Widget _buildInfoSetting(
-    String title,
-    String value,
-    IconData icon,
-    VoidCallback? onTap,
-  ) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              icon,
-              color: Theme.of(context).colorScheme.outline,
-              size: 16,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.6),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Icon(
-            Icons.arrow_forward_ios_rounded,
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.6),
-            size: 14,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNotificationTimePicker(RadioPlayerModel model) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.of(_isDarkMode).surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.of(_isDarkMode).border),
-      ),
-      child: Column(
+  Future<void> _logout(AuthService auth) async {
+    final confirmed = await showAppDialog<bool>(
+      context,
+      builder: (dialogContext) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
+          const PageTitle('Odjava', fontSize: 28),
+          const SizedBox(height: 12),
           Text(
-            'Vrijeme dnevne notifikacije',
+            'Poeni i značke ostaju sačuvani na tvom nalogu.',
             style: TextStyle(
-              fontSize: 12,
-              color: AppColors.of(_isDarkMode).secondaryText,
-              fontWeight: FontWeight.w500,
+              fontSize: 16,
+              height: 1.55,
+              color: colorsOf(dialogContext).text,
             ),
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _showHourPicker(model),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.of(_isDarkMode).inputFill,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.of(_isDarkMode).border,
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          'Sat',
-                          style: TextStyle(
-                            color: AppColors.of(_isDarkMode).secondaryText,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          model.notificationHour.toString().padLeft(2, '0'),
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: _isDarkMode
-                                ? AppTheme.primary
-                                : const Color(0xFF6366F1),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                ':',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: _isDarkMode
-                      ? AppTheme.primary
-                      : const Color(0xFF6366F1),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _showMinutePicker(model),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.of(_isDarkMode).inputFill,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.of(_isDarkMode).border,
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          'Minuta',
-                          style: TextStyle(
-                            color: AppColors.of(_isDarkMode).secondaryText,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          model.notificationMinute.toString().padLeft(2, '0'),
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: _isDarkMode
-                                ? AppTheme.primary
-                                : const Color(0xFF6366F1),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
+          const SizedBox(height: 22),
+          PillButton(
+            label: 'Odjavi me',
+            haptic: Haptic.medium,
+            onPressed: () => Navigator.pop(dialogContext, true),
           ),
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            height: 40,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-              ),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: () async {
-                  await _scheduleReminder(model);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Notifikacija podešena za ${model.notificationHour.toString().padLeft(2, '0')}:${model.notificationMinute.toString().padLeft(2, '0')}',
-                        ),
-                        backgroundColor: const Color(0xFF6366F1),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
-                },
-                child: const Center(
-                  child: Text(
-                    'Sačuvaj',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-              ),
+          const SizedBox(height: 6),
+          Center(
+            child: TextLink(
+              'Ostani prijavljen',
+              onTap: () => Navigator.pop(dialogContext, false),
             ),
           ),
         ],
       ),
     );
+    if (confirmed != true || !mounted) return;
+
+    final model = context.read<RadioPlayerModel>();
+    await model.syncNow().timeout(const Duration(seconds: 5), onTimeout: () {});
+    await model.waitForPendingSync();
+    await auth.signOut();
+    model.resetProgress();
+    if (mounted) {
+      unawaited(
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          Routes.login,
+          (route) => false,
+        ),
+      );
+    }
   }
 
-  void _showHourPicker(RadioPlayerModel model) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => SizedBox(
-        height: 200,
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: const Text(
-                'Izaberi sat',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                itemCount: 24,
-                itemBuilder: (context, index) {
-                  return ListTile(
-                    title: Text(
-                      '${index.toString().padLeft(2, '0')}:00',
-                      textAlign: TextAlign.center,
-                    ),
-                    onTap: () {
-                      model.setNotificationTime(
-                        index,
-                        model.notificationMinute,
-                      );
-                      Navigator.pop(context);
-                      _scheduleReminder(model);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
+  Future<void> _confirmDeleteAccount(AuthService auth) async {
+    // The dialog owns its text field, so the field is only disposed after
+    // the closing animation has finished.
+    final password = await showAppDialog<String>(
+      context,
+      builder: (_) => const _DeleteAccountDialog(),
+    );
+    if (password == null || password.isEmpty || !mounted) return;
+
+    final model = context.read<RadioPlayerModel>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    model.resetProgress();
+    await model.waitForPendingSync();
+    final error = await auth.deleteAccount(password);
+    if (error != null) {
+      final uid = auth.user?.uid;
+      if (uid != null) {
+        try {
+          final data = await FirestoreService.instance.loadUserAchievements(
+            uid,
+          );
+          model.loadUserProgress(uid, data);
+        } catch (e) {
+          logError('Restoring progress after a failed deletion', e);
+        }
+      }
+    }
+    if (!mounted) return;
+    if (error != null) {
+      messenger.showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+    messenger.showSnackBar(const SnackBar(content: Text('Nalog je obrisan.')));
+    unawaited(
+      Navigator.pushNamedAndRemoveUntil(context, Routes.home, (r) => false),
     );
   }
 
-  void _showMinutePicker(RadioPlayerModel model) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => SizedBox(
-        height: 200,
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: const Text(
-                'Izaberi minutu',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                itemCount: 12,
-                itemBuilder: (context, index) {
-                  final minute = index * 5;
-                  return ListTile(
-                    title: Text(
-                      '${model.notificationHour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
-                      textAlign: TextAlign.center,
-                    ),
-                    onTap: () {
-                      model.setNotificationTime(model.notificationHour, minute);
-                      Navigator.pop(context);
-                      _scheduleReminder(model);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+
+  Future<void> _shiftReminder(RadioPlayerModel model, int minutes) async {
+    final total =
+        (model.notificationHour * 60 + model.notificationMinute + minutes) %
+        (24 * 60);
+    model.setNotificationTime(total ~/ 60, total % 60);
+    await _scheduleReminder(model);
   }
 
   Future<void> _scheduleReminder(RadioPlayerModel model) async {
@@ -569,12 +314,7 @@ class _SettingsPageState extends State<SettingsPage> {
       );
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Podsjetnik nije moguće podesiti na ovom uređaju.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        _snack('Podsjetnik nije moguće podesiti na ovom uređaju.');
       }
     }
   }
@@ -586,23 +326,26 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!value) {
       model.notificationsEnabled = false;
       await NotificationService.instance.cancelDailyReminders();
+      if (mounted) _snack('Podsjetnik je isključen');
       return;
     }
     final granted = await NotificationService.instance.requestPermission();
     if (!mounted) return;
     if (!granted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Notifikacije su isključene u postavkama telefona. Uključite ih za Feniks Radio.',
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
+      _snack(
+        'Notifikacije su isključene u postavkama telefona. '
+        'Uključite ih za Feniks Radio.',
       );
       return;
     }
     model.notificationsEnabled = true;
     await _scheduleReminder(model);
+    if (mounted) {
+      _snack(
+        'Podsjetnik je uključen za ${_two(model.notificationHour)}:'
+        '${_two(model.notificationMinute)}',
+      );
+    }
   }
 
   Future<void> _openFeedbackEmail() async {
@@ -615,7 +358,6 @@ class _SettingsPageState extends State<SettingsPage> {
     final uri = Uri(
       scheme: 'mailto',
       path: AppConfig.supportEmail,
-
       query:
           'subject=${Uri.encodeComponent(subject)}'
           '&body=${Uri.encodeComponent(body)}',
@@ -627,13 +369,9 @@ class _SettingsPageState extends State<SettingsPage> {
       opened = false;
     }
     if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Nije pronađena aplikacija za email. Pišite nam na ${AppConfig.supportEmail}',
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
+      _snack(
+        'Nije pronađena aplikacija za email. '
+        'Pišite nam na ${AppConfig.supportEmail}',
       );
     }
   }
@@ -642,64 +380,321 @@ class _SettingsPageState extends State<SettingsPage> {
     final uri = Uri(
       scheme: 'mailto',
       path: AppConfig.supportEmail,
-
       query: 'subject=${Uri.encodeComponent('Podrška - Feniks Radio')}',
     );
     launchUrl(uri);
   }
 
   void _showTermsOfService() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Uslovi korišćenja'),
-        content: const SingleChildScrollView(
-          child: Text(
-            'Korišćenjem Feniks Radio aplikacije slažete se sa sljedećim uslovima:\n\n'
-            '1. Aplikacija je besplatna za korišćenje\n'
-            '   Sve funkcije aplikacije dostupne su bez naknade. Aplikacija ne sadrži plaćanja niti kupovine.\n\n'
-            '2. Sav sadržaj je vlasništvo Feniks Radija ili njegovih partnera\n'
-            '   Audio stream, vizuelni elementi, logo i tekstualni sadržaj zaštićeni su autorskim i srodnim pravima.\n\n'
-            '3. Zabranjena je neovlaštena redistribucija sadržaja\n'
-            '   Nije dozvoljeno kopiranje, javno ponovno emitovanje, prodaja ili distribucija sadržaja bez pismene dozvole.\n\n'
-            '4. Feniks poeni i ljestvica\n'
-            '   Poeni se dobijaju slušanjem programa i osvajanjem znački. Ljestvica prikazuje korisnike sa najviše poena od početka korišćenja. Pokušaji vještačkog povećavanja poena mogu dovesti do uklanjanja sa ljestvice.\n\n'
-            '5. Privatnost i obrada podataka\n'
-            '   Feniks Radio može obrađivati osnovne podatke naloga i statistiku korišćenja (npr. postignuća, omiljene pjesme) radi rada aplikacije.\n\n'
-            '6. Feniks Radio zadržava pravo izmjene uslova\n'
-            '   Uslovi korišćenja mogu biti ažurirani radi usklađivanja sa funkcionalnostima aplikacije i važećim pravilima.\n\n'
-            'Za više informacija kontaktirajte ${AppConfig.supportEmail}',
+    showAppSheet<void>(
+      context,
+      builder: (sheetContext) {
+        final colors = colorsOf(sheetContext);
+        final style = TextStyle(fontSize: 15, height: 1.6, color: colors.text);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const PageTitle('Uslovi korištenja', fontSize: 26),
+            const SizedBox(height: 14),
+            Text(
+              'Sav sadržaj u aplikaciji vlasništvo je Feniks Radija.',
+              style: style,
+            ),
+            const SizedBox(height: 14),
+            Text('Zabranjeno je restreamovanje programa.', style: style),
+            const SizedBox(height: 14),
+            Text(
+              'Zabranjeno je kopiranje sadržaja u bilo kojem obliku.',
+              style: style,
+            ),
+            const SizedBox(height: 24),
+            PillButton(
+              label: 'Razumijem, zatvori',
+              onPressed: () => Navigator.pop(sheetContext),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Asks for the password before the account is deleted. Pops with the
+/// password, or with nothing when cancelled.
+class _DeleteAccountDialog extends StatefulWidget {
+  const _DeleteAccountDialog();
+
+  @override
+  State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
+  final _password = TextEditingController();
+
+  @override
+  void dispose() {
+    _password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const PageTitle('Obriši nalog', fontSize: 28),
+        const SizedBox(height: 12),
+        Text(
+          'Nalog, poeni, značke i omiljene pjesme biće trajno obrisani. '
+          'Ovo se ne može poništiti.',
+          style: TextStyle(fontSize: 15, height: 1.55, color: colors.text),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _password,
+          obscureText: true,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Lozinka za potvrdu'),
+        ),
+        const SizedBox(height: 22),
+        PillButton(
+          label: 'Obriši nalog zauvijek',
+          haptic: Haptic.heavy,
+          onPressed: () => Navigator.pop(context, _password.text),
+        ),
+        const SizedBox(height: 6),
+        Center(
+          child: TextLink('Otkaži', onTap: () => Navigator.pop(context)),
+        ),
+      ],
+    );
+  }
+}
+
+/// Raspberry row for logged-out users: settings are kept only with an
+/// account.
+class _SignInNotice extends StatelessWidget {
+  const _SignInNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Postavke se ne čuvaju dok nisi prijavljen. Prijavi se.',
+      child: Pressable(
+        scale: .98,
+        onTap: () => Navigator.pushNamed(context, Routes.login),
+        child: Container(
+          color: AppTheme.raspberry,
+          padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
+          child: const Row(
+            children: [
+              Icon(Icons.cloud_off_outlined, size: 22, color: Colors.white),
+              SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Postavke se ne čuvaju dok nisi prijavljen',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Prijavi se da ih sačuvaš',
+                      style: TextStyle(fontSize: 13, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, size: 20, color: Colors.white),
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Prihvatam'),
+      ),
+    );
+  }
+}
+
+/// Row inside a block that does something right here, without an arrow.
+class _ActionRow extends StatelessWidget {
+  const _ActionRow({required this.label, required this.onTap, this.color});
+
+  final String label;
+  final VoidCallback onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Haptics.play(Haptic.selection);
+          onTap();
+        },
+        highlightColor: colors.surfaceHover,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: colors.divider)),
           ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w400,
+              color: color ?? colors.ink,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Block extends StatelessWidget {
+  const _Block({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: colorsOf(context).surface,
+      child: Column(children: children),
+    );
+  }
+}
+
+class _SwitchRow extends StatelessWidget {
+  const _SwitchRow({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                    color: colors.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(fontSize: 13, color: colors.muted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          FlatSwitch(value: value, onChanged: onChanged, label: title),
         ],
       ),
     );
   }
+}
 
-  Widget _buildBackToProfileButton(bool isDarkMode) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: () => Navigator.pop(context),
-        icon: const Icon(Icons.person_outline_rounded, size: 20),
-        label: const Text('Nazad na profil'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: isDarkMode ? AppTheme.primary : AppTheme.primaryDark,
-          side: BorderSide(
-            color: isDarkMode
-                ? AppTheme.primaryWithOpacity(0.6)
-                : AppTheme.primary.withValues(alpha: 0.8),
+class _TimeRow extends StatelessWidget {
+  const _TimeRow({
+    required this.time,
+    required this.onEarlier,
+    required this.onLater,
+  });
+
+  final String time;
+  final VoidCallback onEarlier;
+  final VoidCallback onLater;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+
+    Widget stepper(String sign, String label, VoidCallback onTap) => Semantics(
+      button: true,
+      label: label,
+      child: Pressable(
+        onTap: onTap,
+        child: Container(
+          width: 36,
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: colors.track),
           ),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+          child: Text(
+            sign,
+            style: TextStyle(fontSize: 18, color: colors.ink),
           ),
         ),
+      ),
+    );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: colors.divider)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Vrijeme podsjetnika',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w400,
+                color: colors.ink,
+              ),
+            ),
+          ),
+          stepper('−', 'Podsjetnik ranije', onEarlier),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 64,
+            child: Text(
+              time,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w500,
+                color: colors.ink,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          stepper('+', 'Podsjetnik kasnije', onLater),
+        ],
       ),
     );
   }

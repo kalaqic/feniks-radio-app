@@ -53,6 +53,17 @@
         "source": "**",
         "destination": "/index.html"
       }
+    ],
+    "headers": [
+      {
+        "source": "**/*.@(js|json|otf|ttf|wasm|html)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      }
     ]
   }
 }

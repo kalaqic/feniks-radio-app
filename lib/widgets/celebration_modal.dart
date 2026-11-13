@@ -1,235 +1,206 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/radio_player_model.dart';
 import '../theme/app_theme.dart';
-import 'stat_item.dart';
+import 'ui.dart';
 
-class CelebrationModal extends StatefulWidget {
-  const CelebrationModal({super.key, required this.onDismiss});
-  final VoidCallback onDismiss;
+/// "Dobrodošli natrag" popup with the listening streak, shown once per launch.
+/// Meant to be shown with [showAppDialog].
+class CelebrationModal extends StatelessWidget {
+  const CelebrationModal({
+    super.key,
+    required this.onContinue,
+    required this.onClose,
+  });
 
-  @override
-  State<CelebrationModal> createState() => _CelebrationModalState();
-}
+  /// Main button: keeps (or starts) the radio playing.
+  final VoidCallback onContinue;
 
-class _CelebrationModalState extends State<CelebrationModal>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _fadeAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 600),
-      vsync: this,
-    );
-
-    _scaleAnimation = Tween<double>(begin: 0.95, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
-    );
-
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
-    );
-
-    _animationController.forward();
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
+  /// Secondary link: just closes the popup.
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
-    final model = context.read<RadioPlayerModel>();
-    final streakDays = model.consecutiveDays <= 0 ? 1 : model.consecutiveDays;
-    final isFirstDay = streakDays <= 1;
+    final colors = colorsOf(context);
+    final model = context.watch<RadioPlayerModel>();
+    // The streak only includes today after a few minutes of listening.
+    // Opening the app today continues it, so today is shown as the next day.
+    final pastDays = model.listenedToday
+        ? model.consecutiveDays - 1
+        : model.consecutiveDays;
+    final streak = pastDays + 1;
+    final firstDay = streak <= 1;
+    final today = DateTime.now().weekday; // 1 = Monday
 
-    return AnimatedBuilder(
-      animation: _animationController,
-      builder: (context, child) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: ScaleTransition(
-              scale: _scaleAnimation,
-              child: Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [
-                      AppTheme.primary,
-                      AppTheme.primaryDark,
-                      AppTheme.accentDark,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primary.withValues(alpha: 0.4),
-                      blurRadius: 30,
-                      offset: const Offset(0, 15),
-                    ),
-                  ],
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+    // A badge that today's listening would complete still counts as "next".
+    final reached = model.listenedToday ? streak : pastDays;
+    final nextBadge = Achievements.streaks
+        .where((a) => a.requirement > reached)
+        .firstOrNull;
+    final daysLeft = nextBadge == null ? 0 : nextBadge.requirement - streak;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        FadeSlideIn(
+          delay: const Duration(milliseconds: 150),
+          offset: const Offset(0, 8),
+          child: Text(
+            firstDay ? 'Dobrodošli' : 'Dobrodošli natrag',
+            style: TextStyle(fontSize: 13, color: colors.muted),
+          ),
+        ),
+        const SizedBox(height: 14),
+        FadeSlideIn(
+          delay: const Duration(milliseconds: 220),
+          offset: const Offset(0, 8),
+          child: PageTitle(
+            firstDay ? 'Prvi dan slušanja' : '$streak. dan zaredom',
+            fontSize: 30,
+          ),
+        ),
+        const SizedBox(height: 14),
+        FadeSlideIn(
+          delay: const Duration(milliseconds: 300),
+          offset: const Offset(0, 8),
+          child: Text.rich(
+            nextBadge == null
+                ? const TextSpan(text: 'Bravo, niz ide dalje!')
+                : daysLeft == 0
+                ? TextSpan(
+                    text: 'Uzmi dnevnu dozu Feniksa još danas do značke ',
                     children: [
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [AppTheme.primary, AppTheme.primaryDark],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.primary.withValues(alpha: 0.3),
-                              blurRadius: 20,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.celebration_rounded,
-                          color: Colors.white,
-                          size: 36,
-                        ),
+                      TextSpan(
+                        text: nextBadge.name,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
-                      const SizedBox(height: 24),
-
-                      Text(
-                        isFirstDay ? 'Dobrodošli!' : 'Dobrodošli natrag!',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: -0.5,
-                        ),
-                        textAlign: TextAlign.center,
+                      const TextSpan(text: '!'),
+                    ],
+                  )
+                : TextSpan(
+                    text:
+                        'Još $daysLeft ${daysLeft == 1 ? 'dan' : 'dana'} '
+                        'do značke ',
+                    children: [
+                      TextSpan(
+                        text: nextBadge.name,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
-                      const SizedBox(height: 12),
-
-                      Text(
-                        isFirstDay
-                            ? 'Super početak! Danas je vaš prvi dan slušanja Feniks Radija.'
-                            : 'Odlično! Ovo je vaš $streakDays. uzastopni dan slušanja Feniks Radija!',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                          height: 1.4,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          children: [
-                            StatItem(
-                              icon: Icons.local_fire_department_rounded,
-                              iconColor: const Color(0xFFFF3B30),
-                              label: 'Streak',
-                              value: '$streakDays dana',
-                            ),
-                            const Spacer(),
-                            StatItem(
-                              icon: Icons.access_time_rounded,
-                              iconColor: const Color(0xFF007AFF),
-                              label: 'Danas',
-                              value: '${model.todayListeningMinutes} min',
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.lightbulb_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Svaki dan sa lijepim vijestima čini vas srećnijima!',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.white.withValues(alpha: 0.95),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-
-                      Container(
-                        width: double.infinity,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(14),
-                            onTap: widget.onDismiss,
-                            child: const Center(
-                              child: Text(
-                                'Popravi dan!',
-                                style: TextStyle(
-                                  color: AppTheme.primary,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                      const TextSpan(text: '.'),
                     ],
                   ),
-                ),
+            style: TextStyle(fontSize: 16, height: 1.6, color: colors.text),
+          ),
+        ),
+        const SizedBox(height: 20),
+        _WeekBars(today: today, pastDays: pastDays),
+        const SizedBox(height: 28),
+        FadeSlideIn(
+          delay: const Duration(milliseconds: 500),
+          offset: const Offset(0, 8),
+          child: Column(
+            children: [
+              PillButton(
+                label: model.playing
+                    ? 'Nastavi slušanje'
+                    : 'Pusti radio i nastavi niz',
+                onPressed: onContinue,
+              ),
+              const SizedBox(height: 16),
+              TextLink(
+                'Samo otvori početni ekran',
+                padding: EdgeInsets.zero,
+                onTap: onClose,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WeekBars extends StatelessWidget {
+  const _WeekBars({required this.today, required this.pastDays});
+
+  /// 1 = Monday … 7 = Sunday.
+  final int today;
+
+  /// Days in a row right before today with listening.
+  final int pastDays;
+
+  static const _labels = ['P', 'U', 'S', 'Č', 'P', 'S', 'N'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var day = 1; day <= 7; day++) ...[
+          if (day > 1) const SizedBox(width: 6),
+          Expanded(
+            child: _DayBar(
+              label: _labels[day - 1],
+              isToday: day == today,
+              listened: day < today && today - day <= pastDays,
+              delay: Duration(milliseconds: 450 + day * 70),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _DayBar extends StatelessWidget {
+  const _DayBar({
+    required this.label,
+    required this.isToday,
+    required this.listened,
+    required this.delay,
+  });
+
+  final String label;
+  final bool isToday;
+  final bool listened;
+  final Duration delay;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colorsOf(context);
+    final height = isToday ? 40.0 : listened ? 28.0 : 4.0;
+    final color = isToday
+        ? AppTheme.raspberry
+        : listened ? AppTheme.blue : c.track;
+    return Column(
+      children: [
+        SizedBox(
+          height: 40,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: FadeSlideIn(
+              delay: delay,
+              duration: const Duration(milliseconds: 500),
+              offset: const Offset(0, 10),
+              child: Container(
+                width: double.infinity,
+                height: height,
+                color: color,
               ),
             ),
           ),
-        );
-      },
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isToday ? FontWeight.w500 : FontWeight.w300,
+            color: isToday ? c.ink : c.muted,
+          ),
+        ),
+      ],
     );
   }
 }

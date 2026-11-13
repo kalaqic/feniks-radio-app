@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../utils/log.dart';
+import 'app_colors.dart';
+import 'app_theme.dart';
 
 class ThemeProvider extends ChangeNotifier {
   ThemeProvider() {
@@ -39,85 +42,124 @@ class ThemeProvider extends ChangeNotifier {
         });
   }
 
-  static final lightTheme = ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.light,
-    colorScheme:
-        ColorScheme.fromSeed(
-          seedColor: const Color(0xFF007AFF),
-          brightness: Brightness.light,
-        ).copyWith(
-          primary: const Color(0xFF007AFF),
-          primaryContainer: const Color(0xFFE3F2FD),
-          secondary: const Color(0xFF5856D6),
-          secondaryContainer: const Color(0xFFF3F2FF),
-          surface: Colors.white,
-          surfaceContainerHighest: const Color(0xFFFAFAFA),
-          outline: const Color(0xFFE5E5E7),
-        ),
-    fontFamily: 'SF Pro Display',
-    scaffoldBackgroundColor: const Color(0xFFF2F2F7),
-    cardTheme: const CardThemeData(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(16)),
-      ),
-      color: Colors.white,
-    ),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      centerTitle: true,
-      foregroundColor: Color(0xFF1D1D1F),
-      titleTextStyle: TextStyle(
-        fontSize: 20,
-        fontWeight: FontWeight.w600,
-        color: Color(0xFF1D1D1F),
-        letterSpacing: -0.5,
-      ),
-    ),
+  static final lightTheme = _build(AppColors.light, Brightness.light);
+  static final darkTheme = _build(AppColors.dark, Brightness.dark);
+
+  static TextTheme _light(TextTheme t) => t.copyWith(
+    bodySmall: t.bodySmall?.copyWith(fontWeight: FontWeight.w300),
+    bodyMedium: t.bodyMedium?.copyWith(fontWeight: FontWeight.w300),
+    bodyLarge: t.bodyLarge?.copyWith(fontWeight: FontWeight.w300),
+    titleMedium: t.titleMedium?.copyWith(fontWeight: FontWeight.w300),
+    titleSmall: t.titleSmall?.copyWith(fontWeight: FontWeight.w300),
+    labelLarge: t.labelLarge?.copyWith(fontWeight: FontWeight.w400),
   );
 
-  static final darkTheme = ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.dark,
-    colorScheme:
-        ColorScheme.fromSeed(
-          seedColor: const Color(0xFF007AFF),
-          brightness: Brightness.dark,
-        ).copyWith(
-          primary: const Color(0xFF0A84FF),
-          primaryContainer: const Color(0xFF1C1C1E),
-          secondary: const Color(0xFF5E5CE6),
-          secondaryContainer: const Color(0xFF1C1C1E),
-          surface: const Color(0xFF1C1C1E),
-          surfaceContainerHighest: const Color(0xFF2C2C2E),
-          outline: const Color(0xFF38383A),
-          onSurface: Colors.white,
-          onPrimary: Colors.white,
+  static ThemeData _build(AppColors c, Brightness brightness) {
+    final base = ThemeData(
+      useMaterial3: true,
+      brightness: brightness,
+      fontFamily: AppTheme.fontFamily,
+    );
+    return base.copyWith(
+      scaffoldBackgroundColor: c.background,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: AppTheme.raspberry,
+        brightness: brightness,
+      ).copyWith(
+        primary: AppTheme.raspberry,
+        onPrimary: Colors.white,
+        surface: c.surface,
+        onSurface: c.text,
+      ),
+      // Body text is Lexend Light (300), like on radiofeniks.com.
+      textTheme: _light(
+        base.textTheme.apply(
+          fontFamily: AppTheme.fontFamily,
+          bodyColor: c.text,
+          displayColor: c.ink,
         ),
-    fontFamily: 'SF Pro Display',
-    scaffoldBackgroundColor: const Color(0xFF000000),
-    cardTheme: const CardThemeData(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(16)),
       ),
-      color: Color(0xFF1C1C1E),
-    ),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      centerTitle: true,
-      foregroundColor: Colors.white,
-      titleTextStyle: TextStyle(
-        fontSize: 20,
-        fontWeight: FontWeight.w600,
-        color: Colors.white,
-        letterSpacing: -0.5,
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: AppTheme.raspberry,
+        selectionColor: AppTheme.raspberry.withValues(alpha: 0.25),
+        selectionHandleColor: AppTheme.raspberry,
       ),
-    ),
-  );
+      inputDecorationTheme: InputDecorationTheme(
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(vertical: 10),
+        hintStyle: TextStyle(
+          fontFamily: AppTheme.fontFamily,
+          fontSize: 16,
+          fontWeight: FontWeight.w300,
+          color: c.muted,
+        ),
+        labelStyle: TextStyle(
+          fontFamily: AppTheme.fontFamily,
+          fontSize: 15,
+          fontWeight: FontWeight.w400,
+          color: c.muted,
+        ),
+        floatingLabelStyle: TextStyle(
+          fontFamily: AppTheme.fontFamily,
+          fontSize: 15,
+          fontWeight: FontWeight.w400,
+          color: c.muted,
+        ),
+        errorStyle: const TextStyle(
+          fontFamily: AppTheme.fontFamily,
+          fontSize: 12,
+          color: AppTheme.raspberry,
+        ),
+        enabledBorder: UnderlineInputBorder(
+          borderSide: BorderSide(color: c.fieldLine),
+        ),
+        focusedBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: AppTheme.raspberry, width: 1.5),
+        ),
+        errorBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: AppTheme.raspberry),
+        ),
+        focusedErrorBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: AppTheme.raspberry, width: 1.5),
+        ),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: const WidgetStatePropertyAll(Colors.white),
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? AppTheme.raspberry
+              : c.track,
+        ),
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+      ),
+      snackBarTheme: const SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppTheme.button,
+        contentTextStyle: TextStyle(
+          fontFamily: AppTheme.fontFamily,
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+          color: Colors.white,
+        ),
+        actionTextColor: AppTheme.blue,
+        shape: StadiumBorder(),
+        insetPadding: EdgeInsets.fromLTRB(24, 0, 24, 24),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: c.surface,
+        modalBackgroundColor: c.surface,
+        shape: const RoundedRectangleBorder(),
+        showDragHandle: false,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: c.surface,
+        shape: const RoundedRectangleBorder(),
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: AppTheme.raspberry,
+      ),
+      splashFactory: NoSplash.splashFactory,
+      highlightColor: Colors.transparent,
+    );
+  }
 }

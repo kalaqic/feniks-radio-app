@@ -1,54 +1,87 @@
 import 'package:flutter/material.dart';
 
+import 'app_theme.dart';
+
+/// Colors that change between light and dark mode.
 @immutable
 class AppColors {
   const AppColors._({
-    required this.primaryText,
-    required this.secondaryText,
-    required this.mutedText,
-    required this.card,
+    required this.background,
     required this.surface,
-    required this.border,
-    required this.inputFill,
-    required this.shadow,
+    required this.surfaceHover,
+    required this.ink,
+    required this.text,
+    required this.muted,
+    required this.divider,
+    required this.track,
+    required this.fieldLine,
+    required this.soft,
+    required this.button,
+    required this.onButton,
   });
 
-  final Color primaryText;
+  /// Page background.
+  final Color background;
 
-  final Color secondaryText;
-
-  final Color mutedText;
-
-  final Color card;
-
+  /// Flat blocks on top of the background.
   final Color surface;
 
-  final Color border;
+  /// Pressed or hovered row inside a [surface].
+  final Color surfaceHover;
 
-  final Color inputFill;
+  /// Headings and strong text.
+  final Color ink;
 
-  final Color shadow;
+  /// Body text.
+  final Color text;
+
+  /// Secondary text.
+  final Color muted;
+
+  /// Thin separators and field underlines.
+  final Color divider;
+
+  /// Empty part of progress bars and switches.
+  final Color track;
+
+  /// Underline of text fields and outline of the favorite button.
+  final Color fieldLine;
+
+  /// Slightly softer body text (artist names, footnotes).
+  final Color soft;
+
+  /// Main pill button.
+  final Color button;
+  final Color onButton;
 
   static const AppColors light = AppColors._(
-    primaryText: Color(0xFF1D1D1F),
-    secondaryText: Color(0xFF757575),
-    mutedText: Color(0xFF9E9E9E),
-    card: Colors.white,
-    surface: Color(0xFFFAFAFA),
-    border: Color(0xFFEEEEEE),
-    inputFill: Colors.white,
-    shadow: Color(0x0D000000),
+    background: AppTheme.paper,
+    surface: Colors.white,
+    surfaceHover: Color(0xFFF3F1EF),
+    ink: AppTheme.ink,
+    text: AppTheme.text,
+    muted: Color(0x99151515),
+    divider: Color(0x12151515),
+    track: Color(0x2E151515),
+    fieldLine: Color(0x40151515),
+    soft: Color(0xB3151515),
+    button: AppTheme.button,
+    onButton: Colors.white,
   );
 
   static const AppColors dark = AppColors._(
-    primaryText: Colors.white,
-    secondaryText: Color(0xFFB0B0B0),
-    mutedText: Color(0xFFB0B0B0),
-    card: Color(0x08FFFFFF),
-    surface: Color(0x08FFFFFF),
-    border: Color(0x14FFFFFF),
-    inputFill: Color(0xFF16213E),
-    shadow: Color(0x4D000000),
+    background: AppTheme.ink,
+    surface: Color(0xFF212529),
+    surfaceHover: Color(0xFF2B3035),
+    ink: Colors.white,
+    text: Color(0xFFE9ECEF),
+    muted: Color(0x99FFFFFF),
+    divider: Color(0x1AFFFFFF),
+    track: Color(0x2EFFFFFF),
+    fieldLine: Color(0x40FFFFFF),
+    soft: Color(0xB3FFFFFF),
+    button: Colors.white,
+    onButton: AppTheme.ink,
   );
 
   static AppColors of(bool isDarkMode) => isDarkMode ? dark : light;

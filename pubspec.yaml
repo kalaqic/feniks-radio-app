@@ -32,6 +32,17 @@ flutter:
   uses-material-design: true
   assets:
     - lib/assets/png/
+  fonts:
+    - family: Lexend
+      fonts:
+        - asset: lib/assets/fonts/Lexend-Light.ttf
+          weight: 300
+        - asset: lib/assets/fonts/Lexend-Regular.ttf
+          weight: 400
+        - asset: lib/assets/fonts/Lexend-Medium.ttf
+          weight: 500
+        - asset: lib/assets/fonts/Lexend-Bold.ttf
+          weight: 700
 
 flutter_launcher_icons:
   android: true

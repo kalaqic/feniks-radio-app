@@ -71,6 +71,12 @@ class ListeningProgress {
     return _daysBetween(last, _clock()) <= 1 ? _streak : 0;
   }
 
+  /// True once today already counts as a listening day.
+  bool get listenedToday {
+    final last = _lastListeningDay;
+    return last != null && _daysBetween(last, _clock()) == 0;
+  }
+
   int get listeningPoints => totalMinutes * ProgressRules.pointsPerMinute;
 
   int get achievementPoints =>
@@ -292,8 +298,12 @@ class ListeningProgress {
     _changed();
   }
 
+  /// False while nobody is logged in: progress is still counted, but no
+  /// achievement is unlocked until the user signs in.
+  bool achievementsEnabled = true;
+
   void _unlock(Achievement achievement) {
-    if (hasAchievement(achievement)) return;
+    if (!achievementsEnabled || hasAchievement(achievement)) return;
     final earned = EarnedAchievement(achievement, _clock());
     _earned.add(earned);
     if (!_silent) {

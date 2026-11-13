@@ -14,12 +14,16 @@ class AppSettings {
   static const _keyVolume = 'settings.volume';
   static const _keyReminderHour = 'settings.notificationHour';
   static const _keyReminderMinute = 'settings.notificationMinute';
+  static const _keyCelebrationDay = 'settings.celebrationDay';
 
   bool notificationsEnabled = false;
   bool autoPlay = false;
   double volume = 0.8;
   int reminderHour = 8;
   int reminderMinute = 0;
+
+  /// Day (y-m-d) the streak popup was last shown.
+  String? celebrationDay;
 
   Future<void> load() async {
     if (!persist) return;
@@ -31,6 +35,7 @@ class AppSettings {
       volume = prefs.getDouble(_keyVolume) ?? volume;
       reminderHour = prefs.getInt(_keyReminderHour) ?? reminderHour;
       reminderMinute = prefs.getInt(_keyReminderMinute) ?? reminderMinute;
+      celebrationDay = prefs.getString(_keyCelebrationDay);
     } catch (e) {
       logError('Loading settings', e);
     }
@@ -49,6 +54,8 @@ class AppSettings {
       await prefs.setDouble(_keyVolume, volume);
       await prefs.setInt(_keyReminderHour, reminderHour);
       await prefs.setInt(_keyReminderMinute, reminderMinute);
+      final day = celebrationDay;
+      if (day != null) await prefs.setString(_keyCelebrationDay, day);
     } catch (e) {
       logError('Saving settings', e);
     }

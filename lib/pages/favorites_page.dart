@@ -1,14 +1,14 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../config/routes.dart';
 import '../models/radio_player_model.dart';
 import '../services/auth_service.dart';
-import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
-import '../theme/theme_provider.dart';
 import '../widgets/common_footer.dart';
-import '../widgets/login_required_dialog.dart';
+import '../widgets/ui.dart';
 
 class FavoritesPage extends StatefulWidget {
   const FavoritesPage({super.key});
@@ -25,398 +25,274 @@ class _FavoritesPageState extends State<FavoritesPage> {
       if (mounted) {
         context.read<RadioPlayerModel>().trackPageVisit(Routes.favorites);
       }
+      // The new favorites are seen now; the dot on "Moj profil" goes away.
+      hasNewFavorite.value = false;
     });
+  }
+
+  void _remove(RadioPlayerModel model, String song) {
+    model.removeFavorite(song);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Uklonjeno iz omiljenih'),
+          duration: Duration(seconds: 2),
+        ),
+      );
   }
 
   @override
   Widget build(BuildContext context) {
+    final colors = colorsOf(context);
     final model = context.watch<RadioPlayerModel>();
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDarkMode = themeProvider.isDarkMode;
-    final favoriteSongs = model.favoriteSongs;
+    final loggedIn = context.watch<AuthService>().isAuthenticated;
+    // Saved oldest first; the newest one goes on top.
+    final songs = model.favoriteSongs.reversed.toList();
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('Omiljene Pjesme'),
-        leading: IconButton(
-          icon: Icon(
-            Icons.chevron_left,
-            color: isDarkMode
-                ? Colors.white
-                : Theme.of(context).colorScheme.primary,
-            size: 32,
+    return StripedPage(
+      children: [
+        const FadeSlideIn(child: BackLink('Nazad na početnu')),
+        const Padding(
+          padding: EdgeInsets.only(bottom: 8),
+          child: FadeSlideIn(
+            delay: Duration(milliseconds: 40),
+            child: PageTitle('Omiljene pjesme'),
           ),
-          onPressed: () => Navigator.pop(context),
         ),
-      ),
-      body: SafeArea(
-        child: favoriteSongs.isEmpty
-            ? _buildEmptyState(isDarkMode)
-            : _buildFavoritesList(favoriteSongs, model, isDarkMode),
-      ),
-      bottomNavigationBar: CommonFooter(
-        currentRoute: Routes.favorites,
-        isDark: isDarkMode,
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(bool isDarkMode) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                color: AppColors.of(isDarkMode).surface,
-                shape: BoxShape.circle,
-                border: isDarkMode
-                    ? Border.all(color: AppTheme.cardBorder)
-                    : null,
-              ),
-              child: Icon(
-                Icons.favorite_border_rounded,
-                size: 60,
-                color: AppColors.of(isDarkMode).mutedText,
-              ),
+        if (!loggedIn) ...[
+          const FadeSlideIn(
+            delay: Duration(milliseconds: 80),
+            child: LoginPrompt(
+              title: 'Želiš mogućnost da sačuvaš svoje omiljene pjesme?',
+              message: 'Prijavi se i pjesme koje voliš uvijek su ti pri ruci.',
+              color: AppTheme.raspberry,
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Nema omiljenih pjesama',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: isDarkMode ? AppTheme.textPrimary : Colors.grey.shade700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Dodajte pjesme u omiljene tokom slušanja Feniks Radija',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.of(isDarkMode).mutedText,
-                height: 1.4,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFavoritesList(
-    List<String> favoriteSongs,
-    RadioPlayerModel model,
-    bool isDarkMode,
-  ) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(24),
-      itemCount: favoriteSongs.length,
-      itemBuilder: (context, index) {
-        final song = favoriteSongs[index];
-        final parts = song.split(' - ');
-        final title = parts.isNotEmpty ? parts[0] : song;
-        final artist = parts.length > 1 ? parts[1] : 'Nepoznat izvođač';
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            gradient: isDarkMode
-                ? LinearGradient(
-                    colors: [
-                      AppTheme.cardBackground,
-                      AppTheme.backgroundMedium.withValues(alpha: 0.75),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : const LinearGradient(
-                    colors: [Color(0xFFFFFFFF), Color(0xFFF8FAFF)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+          ),
+          const FadeSlideIn(
+            delay: Duration(milliseconds: 200),
+            child: _LockedPreview(),
+          ),
+        ] else if (songs.isEmpty)
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 80),
+            child: Container(
+              color: colors.surface,
+              padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Još nemaš omiljenih pjesama',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w500,
+                      color: colors.ink,
+                    ),
                   ),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.of(isDarkMode).shadow,
-                blurRadius: 18,
-                offset: const Offset(0, 6),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Kad čuješ pjesmu koja ti se sviđa, na početnoj klikni '
+                    '"Dodaj u omiljene".',
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.55,
+                      color: colors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextLink(
+                    'Vrati se na radio',
+                    padding: EdgeInsets.zero,
+                    onTap: () => Navigator.pop(context),
+                  ),
+                ],
               ),
-            ],
-            border: Border.all(
-              color: AppColors.of(isDarkMode).border,
-              width: 1,
+            ),
+          )
+        else ...[
+          Container(
+            color: colors.surface,
+            child: Column(
+              children: [
+                for (final (i, song) in songs.indexed)
+                  FadeSlideIn(
+                    key: ValueKey(song),
+                    delay: Duration(milliseconds: 100 + 70 * (i < 10 ? i : 10)),
+                    offset: const Offset(-24, 0),
+                    child: _SongRow(
+                      song: song,
+                      index: i,
+                      onRemove: () => _remove(model, song),
+                    ),
+                  ),
+              ],
             ),
           ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(18),
-              onTap: () =>
-                  _showSongDetails(title, artist, song, model, isDarkMode),
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Row(
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 500),
+            child: Text(
+              'Klikni na srce da ukloniš pjesmu iz omiljenih.',
+              style: TextStyle(fontSize: 13, color: colors.muted),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+const _rowColors = [AppTheme.raspberry, AppTheme.blue, AppTheme.coral];
+
+class _SongRow extends StatelessWidget {
+  const _SongRow({
+    required this.song,
+    required this.index,
+    required this.onRemove,
+  });
+
+  final String song;
+  final int index;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    final parts = song.split(' - ');
+    final title = parts.first;
+    final artist = parts.length > 1 ? parts.sublist(1).join(' - ') : '';
+    final square = _rowColors[index % _rowColors.length];
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      decoration: BoxDecoration(
+        border: index == 0
+            ? null
+            : Border(top: BorderSide(color: colors.divider)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            color: square,
+            child: Icon(
+              Icons.music_note_outlined,
+              size: 18,
+              color: AppTheme.onBrand(square),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                    color: colors.ink,
+                  ),
+                ),
+                if (artist.isNotEmpty)
+                  Text(
+                    artist,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, color: colors.muted),
+                  ),
+              ],
+            ),
+          ),
+          Semantics(
+            button: true,
+            label: 'Ukloni $title iz omiljenih',
+            child: Pressable(
+              onTap: onRemove,
+              scale: .85,
+              child: const SizedBox(
+                width: 44,
+                height: 44,
+                child: Icon(
+                  Icons.favorite,
+                  size: 20,
+                  color: AppTheme.raspberry,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Two blurred example songs behind a lock, shown to logged-out users.
+class _LockedPreview extends StatelessWidget {
+  const _LockedPreview();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+
+    Widget row(String title, String artist, Color square, bool divider) =>
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          decoration: BoxDecoration(
+            border: divider
+                ? Border(top: BorderSide(color: colors.divider))
+                : null,
+          ),
+          child: Row(
+            children: [
+              Container(width: 40, height: 40, color: square),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        gradient: AppTheme.primaryGradient,
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryWithOpacity(0.28),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.music_note_rounded,
-                        color: Colors.white,
-                        size: 24,
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w400,
+                        color: colors.ink,
                       ),
                     ),
-                    const SizedBox(width: 16),
-
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.of(isDarkMode).primaryText,
-                              letterSpacing: -0.2,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            artist,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.of(isDarkMode).secondaryText,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: isDarkMode
-                            ? Colors.red.withValues(alpha: 0.15)
-                            : Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isDarkMode
-                              ? Colors.red.withValues(alpha: 0.25)
-                              : Colors.red.shade100,
-                        ),
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-                            final authService = context.read<AuthService>();
-                            if (!authService.isAuthenticated) {
-                              LoginRequiredDialog.show(
-                                context,
-                                'brisanje omiljenih pjesama',
-                              );
-                              return;
-                            }
-                            _removeFavorite(song, model);
-                          },
-                          child: Icon(
-                            Icons.favorite,
-                            color: Colors.red.shade400,
-                            size: 20,
-                          ),
-                        ),
-                      ),
+                    const SizedBox(height: 2),
+                    Text(
+                      artist,
+                      style: TextStyle(fontSize: 13, color: colors.muted),
                     ),
                   ],
                 ),
               ),
-            ),
+              const Icon(Icons.favorite, size: 20, color: AppTheme.raspberry),
+            ],
           ),
         );
-      },
-    );
-  }
 
-  void _showSongDetails(
-    String title,
-    String artist,
-    String fullSong,
-    RadioPlayerModel model,
-    bool isDarkMode,
-  ) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: AppColors.of(isDarkMode).card,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
-          border: isDarkMode ? Border.all(color: AppTheme.cardBorder) : null,
-        ),
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    return ExcludeSemantics(
+      child: Container(
+        color: colors.surface,
+        child: Stack(
+          alignment: Alignment.center,
           children: [
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: isDarkMode
-                    ? AppTheme.textSecondary
-                    : Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                gradient: AppTheme.primaryGradient,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryWithOpacity(0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
+            ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Column(
+                children: [
+                  row('Naziv pjesme', 'Ime izvođača', AppTheme.blue, false),
+                  row('Druga pjesma', 'Drugi izvođač', AppTheme.coral, true),
                 ],
               ),
-              child: const Icon(
-                Icons.music_note_rounded,
-                color: Colors.white,
-                size: 40,
-              ),
             ),
-            const SizedBox(height: 24),
-
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: AppColors.of(isDarkMode).primaryText,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-
-            Text(
-              artist,
-              style: TextStyle(
-                fontSize: 16,
-                color: AppColors.of(isDarkMode).secondaryText,
-                fontWeight: FontWeight.w500,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.red.shade200, width: 1),
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () {
-                          final authService = context.read<AuthService>();
-                          if (!authService.isAuthenticated) {
-                            Navigator.pop(context);
-                            LoginRequiredDialog.show(
-                              context,
-                              'brisanje omiljenih pjesama',
-                            );
-                            return;
-                          }
-                          _removeFavorite(fullSong, model);
-                          Navigator.pop(context);
-                        },
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.heart_broken_rounded,
-                              color: Colors.red.shade600,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Ukloni iz omiljenih',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.red.shade600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+            Icon(Icons.lock_outline, size: 26, color: colors.ink),
           ],
         ),
-      ),
-    );
-  }
-
-  void _removeFavorite(String song, RadioPlayerModel model) {
-    model.removeFavorite(song);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Row(
-          children: [
-            Icon(Icons.heart_broken_rounded, color: Colors.white, size: 18),
-            SizedBox(width: 8),
-            Text('Uklonjeno iz omiljenih'),
-          ],
-        ),
-        backgroundColor: Colors.red.shade400,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
       ),
     );
   }

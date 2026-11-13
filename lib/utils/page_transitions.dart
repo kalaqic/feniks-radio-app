@@ -1,21 +1,14 @@
 import 'package:flutter/material.dart';
 
-import '../widgets/app_background_layer.dart';
-
 class FadePageRoute<T> extends PageRouteBuilder<T> {
   FadePageRoute({
     required Widget page,
     super.settings,
-    Duration duration = const Duration(milliseconds: 250),
+    Duration duration = const Duration(milliseconds: 300),
   }) : super(
          transitionDuration: duration,
-         reverseTransitionDuration: duration,
-         pageBuilder: (context, animation, secondaryAnimation) => Stack(
-           children: [
-             const Positioned.fill(child: AppBackgroundLayer()),
-             Positioned.fill(child: page),
-           ],
-         ),
+         reverseTransitionDuration: const Duration(milliseconds: 300),
+         pageBuilder: (context, animation, secondaryAnimation) => page,
          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
              FadeTransition(
                opacity: CurvedAnimation(

@@ -8,13 +8,25 @@ import '../config/routes.dart';
 import '../models/radio_player_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
-import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
-import '../theme/theme_provider.dart';
 import '../utils/log.dart';
-import '../widgets/app_card.dart';
 import '../widgets/common_footer.dart';
-import '../widgets/gradient_card.dart';
+import '../widgets/ui.dart';
+
+const _months = [
+  'januara',
+  'februara',
+  'marta',
+  'aprila',
+  'maja',
+  'juna',
+  'jula',
+  'avgusta',
+  'septembra',
+  'oktobra',
+  'novembra',
+  'decembra',
+];
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -24,14 +36,17 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  String? _displayEmail;
   final _emailController = TextEditingController();
   bool _savingEmail = false;
+  bool _emailSaved = false;
+  Timer? _savedTimer;
+  int? _rank;
 
   @override
   void initState() {
     super.initState();
     _loadDisplayEmail();
+    _loadRank();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         context.read<RadioPlayerModel>().trackPageVisit(Routes.profile);
@@ -41,804 +56,537 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   void dispose() {
+    _savedTimer?.cancel();
     _emailController.dispose();
     super.dispose();
   }
 
   Future<void> _loadDisplayEmail() async {
     final auth = context.read<AuthService>();
-    if (auth.user?.uid == null) return;
+    final uid = auth.user?.uid;
+    if (uid == null) return;
     try {
-      final email = await FirestoreService.instance.getUserDisplayEmail(
-        auth.user!.uid,
-      );
-      if (mounted) {
-        setState(() {
-          _displayEmail = email;
-          if (email != null) _emailController.text = email;
-        });
-      }
+      final email = await FirestoreService.instance.getUserDisplayEmail(uid);
+      if (mounted && email != null) _emailController.text = email;
     } on FirebaseException catch (e) {
       if (e.code != 'permission-denied') return;
-      if (mounted) {
-        setState(() {
-          _displayEmail = null;
-        });
-      }
     } catch (e) {
       logError('Loading display email', e);
     }
   }
 
+  Future<void> _loadRank() async {
+    if (!context.read<AuthService>().isAuthenticated) return;
+    final points = context.read<RadioPlayerModel>().totalFeniksPoints;
+    try {
+      final rank = await FirestoreService.instance.getMyRank(points);
+      if (mounted) setState(() => _rank = rank);
+    } catch (e) {
+      logError('Loading leaderboard rank', e);
+    }
+  }
+
   Future<void> _saveDisplayEmail() async {
-    final auth = context.read<AuthService>();
-    if (auth.user?.uid == null) return;
+    final uid = context.read<AuthService>().user?.uid;
+    if (uid == null) return;
+    FocusScope.of(context).unfocus();
     setState(() => _savingEmail = true);
     final value = _emailController.text.trim();
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await FirestoreService.instance.setUserDisplayEmail(
-        auth.user!.uid,
+        uid,
         value.isEmpty ? null : value,
       );
-      if (mounted) {
-        setState(() {
-          _displayEmail = value.isEmpty ? null : value;
-          _savingEmail = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(value.isEmpty ? 'Email uklonjen.' : 'Email sačuvan.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      if (!mounted) return;
+      setState(() {
+        _savingEmail = false;
+        _emailSaved = true;
+      });
+      _savedTimer?.cancel();
+      _savedTimer = Timer(const Duration(milliseconds: 2500), () {
+        if (mounted) setState(() => _emailSaved = false);
+      });
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(value.isEmpty ? 'Email uklonjen.' : 'Email sačuvan.'),
+        ),
+      );
     } on FirebaseException catch (e) {
-      if (mounted) {
-        setState(() => _savingEmail = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              e.code == 'permission-denied'
-                  ? 'Nemate dozvolu za ovu radnju (Firestore pravila).'
-                  : 'Greška pri čuvanju emaila.',
-            ),
-            behavior: SnackBarBehavior.floating,
+      if (!mounted) return;
+      setState(() => _savingEmail = false);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            e.code == 'permission-denied'
+                ? 'Nemate dozvolu za ovu radnju (Firestore pravila).'
+                : 'Greška pri čuvanju emaila.',
           ),
-        );
-      }
+        ),
+      );
     } catch (_) {
-      if (mounted) {
-        setState(() => _savingEmail = false);
-      }
+      if (mounted) setState(() => _savingEmail = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final model = context.watch<RadioPlayerModel>();
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDarkMode = themeProvider.isDarkMode;
+    final colors = colorsOf(context);
     final auth = context.watch<AuthService>();
+    final model = context.watch<RadioPlayerModel>();
+    final user = auth.user;
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('Moj profil'),
-        automaticallyImplyLeading: false,
-      ),
+      backgroundColor: colors.background,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 20),
-              if (auth.isAuthenticated && auth.user != null) ...[
-                _buildProfileCard(context, auth, model, isDarkMode),
-                const SizedBox(height: 16),
-                _buildEmailSection(context, auth, isDarkMode),
-                const SizedBox(height: 24),
-                _buildPointsCard(context, model, isDarkMode),
-                const SizedBox(height: 32),
-                _buildLogoutButton(context, auth, isDarkMode),
-                const SizedBox(height: 12),
-                _buildChangePasswordButton(context, isDarkMode),
-                const SizedBox(height: 4),
-                Center(
-                  child: TextButton(
-                    onPressed: () => _confirmDeleteAccount(context, auth),
-                    child: Text(
-                      'Obriši nalog',
-                      style: TextStyle(
-                        color: AppColors.of(isDarkMode).secondaryText,
-                        decoration: TextDecoration.underline,
+              FadeSlideIn(
+                child: Row(
+                  children: [
+                    const Expanded(child: PageTitle('Moj profil')),
+                    Semantics(
+                      button: true,
+                      label: 'Otvori postavke',
+                      child: Pressable(
+                        onTap: () =>
+                            Navigator.pushNamed(context, Routes.settings),
+                        child: SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: Icon(
+                            Icons.settings_outlined,
+                            color: colors.ink,
+                          ),
+                        ),
                       ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              if (!auth.isAuthenticated || user == null) ...[
+                const FadeSlideIn(
+                  delay: Duration(milliseconds: 80),
+                  child: LoginPrompt(
+                    title: 'Prijavi se da vidiš svoj profil',
+                    message:
+                        'Tvoji poeni, značke i omiljene pjesme čuvaju se na '
+                        'tvom nalogu.',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 160),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextLink(
+                      'Nemaš nalog? Napravi ga za minut',
+                      padding: EdgeInsets.zero,
+                      onTap: () => Navigator.pushNamed(context, Routes.welcome),
                     ),
                   ),
                 ),
               ] else ...[
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 40),
+                  child: _Identity(
+                    name: user.displayName ?? 'Korisnik',
+                    since: user.metadata.creationTime,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 100),
+                  child: Pressable(
+                    scale: .98,
+                    onTap: () =>
+                        Navigator.pushNamed(context, Routes.leaderboard),
+                    child: Container(
+                      color: AppTheme.raspberry,
+                      padding: const EdgeInsets.all(22),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Moji Feniks poeni',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w400,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                CountUp(
+                                  value: model.totalFeniksPoints,
+                                  style: const TextStyle(
+                                    fontSize: 40,
+                                    height: 1,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            _rank == null
+                                ? 'Pogledaj ljestvicu'
+                                : '#$_rank na ljestvici',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w400,
+                              color: Colors.white,
+                              decoration: TextDecoration.underline,
+                              decorationColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 125),
+                  child: _ListeningStats(model: model),
+                ),
+                const SizedBox(height: 16),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 150),
+                  child: Container(
+                    color: colors.surface,
                     child: Column(
                       children: [
-                        Icon(
-                          Icons.person_outline_rounded,
-                          size: 64,
-                          color: AppColors.of(isDarkMode).mutedText,
+                        NavRow(
+                          label: 'Moje značke',
+                          trailing:
+                              '${model.earnedAchievements.length} / '
+                              '${model.allAchievements.length}',
+                          showDivider: false,
+                          horizontal: 22,
+                          onTap: () =>
+                              Navigator.pushNamed(context, Routes.badges),
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Prijavite se da biste vidjeli profil',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: AppColors.of(isDarkMode).secondaryText,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () =>
-                                Navigator.pushNamed(context, Routes.login),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.primary,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: hasNewFavorite,
+                          builder: (context, isNew, _) => NavRow(
+                            label: 'Omiljene pjesme',
+                            trailing: '${model.favoriteSongs.length}',
+                            dot: isNew,
+                            horizontal: 22,
+                            onTap: () => Navigator.pushNamed(
+                              context,
+                              Routes.favorites,
                             ),
-                            child: const Text('Prijavi se'),
                           ),
                         ),
                       ],
                     ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 200),
+                  child: _EmailBlock(
+                    controller: _emailController,
+                    saving: _savingEmail,
+                    saved: _emailSaved,
+                    onSave: _saveDisplayEmail,
                   ),
                 ),
               ],
-              const SizedBox(height: 120),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: CommonFooter(
-        currentRoute: Routes.profile,
-        isDark: isDarkMode,
-      ),
+      bottomNavigationBar: const CommonFooter(currentRoute: Routes.profile),
     );
   }
+}
 
-  Widget _buildProfileCard(
-    BuildContext context,
-    AuthService auth,
-    RadioPlayerModel model,
-    bool isDarkMode,
-  ) {
-    final displayName = auth.user?.displayName ?? 'Korisnik';
+class _Identity extends StatelessWidget {
+  const _Identity({required this.name, required this.since});
 
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppTheme.primary, AppTheme.primaryDark],
-                  ),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      displayName,
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.of(isDarkMode).primaryText,
-                      ),
-                    ),
-                    if (_displayEmail != null && _displayEmail!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        _displayEmail!,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.of(isDarkMode).secondaryText,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: Icon(
-                  Icons.settings_rounded,
-                  size: 22,
-                  color: isDarkMode
-                      ? AppTheme.textPrimary
-                      : const Color(0xFF4B5563),
-                ),
-                tooltip: 'Postavke',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                onPressed: () {
-                  Navigator.pushNamed(context, Routes.settings);
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  final String name;
+  final DateTime? since;
 
-  Widget _buildEmailSection(
-    BuildContext context,
-    AuthService auth,
-    bool isDarkMode,
-  ) {
-    if (auth.user?.uid == null) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: isDarkMode
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.cardBackground,
-                  AppTheme.primaryWithOpacity(0.08),
-                ],
-              )
-            : const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFFFFF8F5), Color(0xFFF5F0FF)],
-              ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDarkMode
-              ? AppTheme.primaryWithOpacity(0.25)
-              : const Color(0xFFE8D5F0),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: (isDarkMode ? Colors.black : AppTheme.primary).withValues(
-              alpha: isDarkMode ? 0.2 : 0.06,
-            ),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    final since = this.since;
+    return Row(
+      children: [
+        Container(
+          width: 56,
+          height: 56,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            color: AppTheme.raspberry,
+            shape: BoxShape.circle,
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text('💜', style: TextStyle(fontSize: 28)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Ostanimo u kontaktu!',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: isDarkMode
-                        ? AppTheme.textPrimary
-                        : const Color(0xFF2D1B4E),
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Dajte nam svoj email da vas prvi obavijestimo o novostima, specijalnim emisijama i svemu što se dešava na Feniks radiju! ✨📻',
-            style: TextStyle(
-              fontSize: 14,
-              height: 1.45,
-              color: isDarkMode
-                  ? AppTheme.textSecondary
-                  : const Color(0xFF5C4D6B),
-            ),
-          ),
-          const SizedBox(height: 18),
-          TextField(
-            controller: _emailController,
-            decoration: InputDecoration(
-              hintText: 'vas@email.com',
-              prefixIcon: Icon(
-                Icons.mail_outline_rounded,
-                size: 22,
-                color: isDarkMode
-                    ? AppTheme.textSecondary
-                    : const Color(0xFF8B7B9A),
-              ),
-              hintStyle: TextStyle(
-                fontSize: 14,
-                color: AppColors.of(isDarkMode).mutedText,
-              ),
-              filled: true,
-              fillColor: isDarkMode
-                  ? AppTheme.backgroundMedium
-                  : Colors.white.withValues(alpha: 0.8),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(
-                  color: isDarkMode
-                      ? AppTheme.cardBorder
-                      : const Color(0xFFE0D4E8),
-                ),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(
-                  color: isDarkMode
-                      ? AppTheme.cardBorder
-                      : const Color(0xFFE0D4E8),
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: AppTheme.primary, width: 2),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
-              ),
-            ),
-            keyboardType: TextInputType.emailAddress,
-            autocorrect: false,
-            style: TextStyle(
-              fontSize: 15,
-              color: AppColors.of(isDarkMode).primaryText,
-            ),
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _savingEmail ? null : _saveDisplayEmail,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                elevation: 0,
-              ),
-              child: _savingEmail
-                  ? const SizedBox(
-                      height: 22,
-                      width: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text('✨', style: TextStyle(fontSize: 16)),
-                        SizedBox(width: 8),
-                        Text('Sačuvaj i budi u toku'),
-                      ],
-                    ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPointsCard(
-    BuildContext context,
-    RadioPlayerModel model,
-    bool isDarkMode,
-  ) {
-    return GradientCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.emoji_events_rounded,
-                color: Colors.white.withValues(alpha: 0.9),
-                size: 28,
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'Moji Feniks Poeni',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '${model.totalFeniksPoints} poena',
+          child: Text(
+            name.isNotEmpty ? name[0].toUpperCase() : '?',
             style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
+              fontSize: 22,
+              fontWeight: FontWeight.w500,
               color: Colors.white,
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChangePasswordButton(BuildContext context, bool isDarkMode) {
-    final colors = AppColors.of(isDarkMode);
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: OutlinedButton.icon(
-        onPressed: () => _changePassword(context),
-        icon: Icon(Icons.lock_reset_rounded, color: colors.primaryText),
-        label: Text(
-          'Promijeni lozinku',
-          style: TextStyle(
-            color: colors.primaryText,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
         ),
-        style: OutlinedButton.styleFrom(
-          side: BorderSide(
-            color: colors.secondaryText.withValues(alpha: 0.4),
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _changePassword(BuildContext context) async {
-    final changed = await showDialog<bool>(
-      context: context,
-      builder: (_) => const _ChangePasswordDialog(),
-    );
-    if (changed != true || !context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Lozinka je promijenjena.'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  Future<void> _confirmDeleteAccount(
-    BuildContext context,
-    AuthService auth,
-  ) async {
-    final passwordController = TextEditingController();
-    final password = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Obriši nalog'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Nalog, poeni, značke i omiljene pjesme biće trajno obrisani. '
-              'Ovo se ne može poništiti.\n\nZa potvrdu unesite lozinku:',
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Lozinka'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Otkaži'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, passwordController.text),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Obriši zauvijek'),
-          ),
-        ],
-      ),
-    );
-    if (password == null || password.isEmpty || !context.mounted) return;
-
-    final model = context.read<RadioPlayerModel>();
-
-    model.resetProgress();
-    await model.waitForPendingSync();
-    final error = await auth.deleteAccount(password);
-    if (error != null) {
-      final uid = auth.user?.uid;
-      if (uid != null) {
-        try {
-          final data = await FirestoreService.instance.loadUserAchievements(
-            uid,
-          );
-          model.loadUserProgress(uid, data);
-        } catch (e) {
-          logError('Restoring progress after a failed deletion', e);
-        }
-      }
-    }
-    if (!context.mounted) return;
-    if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error), behavior: SnackBarBehavior.floating),
-      );
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Nalog je obrisan.'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-    unawaited(
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        Routes.welcome,
-        (route) => false,
-      ),
-    );
-  }
-
-  Widget _buildLogoutButton(
-    BuildContext context,
-    AuthService authService,
-    bool isDarkMode,
-  ) {
-    return Container(
-      width: double.infinity,
-      height: 50,
-      decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.withValues(alpha: 0.3), width: 1),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () async {
-            final confirmed = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Odjava'),
-                content: const Text(
-                  'Da li ste sigurni da želite da se odjavite?',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('Otkaži'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
-                    child: const Text('Odjavi se'),
-                  ),
-                ],
-              ),
-            );
-            if (confirmed == true && context.mounted) {
-              final model = context.read<RadioPlayerModel>();
-              await model.syncNow().timeout(
-                const Duration(seconds: 5),
-                onTimeout: () {},
-              );
-              await model.waitForPendingSync();
-              await authService.signOut();
-              model.resetProgress();
-              if (context.mounted) {
-                unawaited(
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    Routes.login,
-                    (route) => false,
-                  ),
-                );
-              }
-            }
-          },
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.logout, color: Colors.red, size: 20),
-              SizedBox(width: 8),
               Text(
-                'Odjavi se',
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: Colors.red,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w500,
+                  color: colors.ink,
                 ),
               ),
+              if (since != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  'Slušalac od ${_months[since.month - 1]} ${since.year}.',
+                  style: TextStyle(fontSize: 14, color: colors.muted),
+                ),
+              ],
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// Three numbers about listening, counted up when the profile opens.
+class _ListeningStats extends StatelessWidget {
+  const _ListeningStats({required this.model});
+
+  final RadioPlayerModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    final hours = model.totalListeningMinutes ~/ 60;
+    final (int value, String label) time = hours >= 10
+        ? (hours, 'sati slušanja')
+        : (model.totalListeningMinutes, 'minuta slušanja');
+
+    Widget stat(int value, String label, int delay) => Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CountUp(
+            value: value,
+            delay: Duration(milliseconds: delay),
+            style: TextStyle(
+              fontSize: 26,
+              height: 1.1,
+              fontWeight: FontWeight.w500,
+              color: colors.ink,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(label, style: TextStyle(fontSize: 12, color: colors.muted)),
+        ],
+      ),
+    );
+
+    return Container(
+      color: colors.surface,
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          stat(time.$1, time.$2, 350),
+          Container(width: 1, height: 40, color: colors.divider),
+          const SizedBox(width: 16),
+          stat(model.consecutiveDays, 'dana zaredom', 450),
+          Container(width: 1, height: 40, color: colors.divider),
+          const SizedBox(width: 16),
+          stat(model.totalListeningDays, 'dana s Feniksom', 550),
+        ],
       ),
     );
   }
 }
 
-class _ChangePasswordDialog extends StatefulWidget {
-  const _ChangePasswordDialog();
+/// "Ostanimo u kontaktu": one closed row that opens into the email form.
+class _EmailBlock extends StatefulWidget {
+  const _EmailBlock({
+    required this.controller,
+    required this.saving,
+    required this.saved,
+    required this.onSave,
+  });
+
+  final TextEditingController controller;
+  final bool saving;
+  final bool saved;
+  final VoidCallback onSave;
 
   @override
-  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+  State<_EmailBlock> createState() => _EmailBlockState();
 }
 
-class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _currentController = TextEditingController();
-  final _newController = TextEditingController();
-  final _confirmController = TextEditingController();
-  bool _saving = false;
-  bool _obscure = true;
-  String? _error;
+class _EmailBlockState extends State<_EmailBlock> {
+  bool _open = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // The saved email arrives a moment later; show it in the closed row.
+    widget.controller.addListener(_changed);
+  }
 
   @override
   void dispose() {
-    _currentController.dispose();
-    _newController.dispose();
-    _confirmController.dispose();
+    widget.controller.removeListener(_changed);
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    final error = await context.read<AuthService>().changePassword(
-      currentPassword: _currentController.text,
-      newPassword: _newController.text,
-    );
-    if (!mounted) return;
-    if (error == null) {
-      Navigator.pop(context, true);
-      return;
-    }
-    setState(() {
-      _saving = false;
-      _error = error;
-    });
+  void _changed() {
+    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Promijeni lozinku'),
-      content: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+    const ink = AppTheme.ink;
+    final email = widget.controller.text.trim();
+    return Container(
+      color: AppTheme.blue,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            button: true,
+            expanded: _open,
+            child: Pressable(
+              scale: .99,
+              haptic: _open ? Haptic.selection : Haptic.light,
+              onTap: () => setState(() => _open = !_open),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 18, 18, 18),
+                child: Row(
+                  children: [
+                    const Icon(Icons.mail_outline_rounded, size: 20, color: ink),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Ostanimo u kontaktu',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              color: ink,
+                            ),
+                          ),
+                          Text(
+                            email.isEmpty ? 'Novosti i specijalne emisije' : email,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 13, color: ink),
+                          ),
+                        ],
+                      ),
+                    ),
+                    AnimatedRotation(
+                      turns: _open ? .25 : 0,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOutCubic,
+                      child: const Icon(Icons.chevron_right, size: 20, color: ink),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          RevealDrawer(
+            open: _open,
             children: [
-              TextFormField(
-                controller: _currentController,
-                obscureText: _obscure,
-                autofocus: true,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Trenutna lozinka',
-                ),
-                validator: (v) => (v == null || v.isEmpty)
-                    ? 'Unesite trenutnu lozinku'
-                    : null,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
+                child: _form(context),
               ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _newController,
-                obscureText: _obscure,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(labelText: 'Nova lozinka'),
-                validator: (v) {
-                  if (v == null || v.length < 6) {
-                    return 'Najmanje 6 karaktera';
-                  }
-                  if (v == _currentController.text) {
-                    return 'Nova lozinka mora biti drugačija';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _confirmController,
-                obscureText: _obscure,
-                textInputAction: TextInputAction.done,
-                onFieldSubmitted: (_) => _saving ? null : _submit(),
-                decoration: const InputDecoration(
-                  labelText: 'Ponovi novu lozinku',
-                ),
-                validator: (v) => v != _newController.text
-                    ? 'Lozinke se ne poklapaju'
-                    : null,
-              ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                  icon: Icon(
-                    _obscure
-                        ? Icons.visibility_rounded
-                        : Icons.visibility_off_rounded,
-                    size: 18,
-                  ),
-                  label: Text(_obscure ? 'Prikaži lozinke' : 'Sakrij lozinke'),
-                ),
-              ),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    _error!,
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                ),
             ],
           ),
-        ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.pop(context, false),
-          child: const Text('Otkaži'),
+    );
+  }
+
+  Widget _form(BuildContext context) {
+    const ink = AppTheme.ink;
+    final controller = widget.controller;
+    final saving = widget.saving;
+    final saved = widget.saved;
+    final onSave = widget.onSave;
+    return Theme(
+        data: Theme.of(context).copyWith(
+          inputDecorationTheme: Theme.of(context).inputDecorationTheme.copyWith(
+            labelStyle: const TextStyle(fontSize: 15, color: ink),
+            floatingLabelStyle: const TextStyle(fontSize: 15, color: ink),
+            hintStyle: TextStyle(color: ink.withValues(alpha: .6)),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: ink.withValues(alpha: .35)),
+            ),
+            focusedBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: ink, width: 1.5),
+            ),
+          ),
         ),
-        TextButton(
-          onPressed: _saving ? null : _submit,
-          child: _saving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Sačuvaj'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Ostavi email i prvi saznaj za specijalne emisije i novosti na '
+              'Feniks Radiju.',
+              style: TextStyle(fontSize: 14, height: 1.55, color: ink),
+            ),
+            const SizedBox(height: 12),
+            Semantics(
+              label: 'Email adresa',
+              child: TextField(
+                controller: controller,
+                keyboardType: TextInputType.emailAddress,
+                autocorrect: false,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w300,
+                  color: ink,
+                ),
+                cursorColor: ink,
+                decoration: const InputDecoration(hintText: 'vas@email.com'),
+                onSubmitted: (_) => onSave(),
+              ),
+            ),
+            const SizedBox(height: 18),
+            PillButton(
+              label: saved ? 'Email je sačuvan' : 'Sačuvaj email',
+              icon: saved ? Icons.check : null,
+              expand: false,
+              height: 44,
+              fontSize: 14,
+              loading: saving,
+              onPressed: onSave,
+            ),
+          ],
         ),
-      ],
     );
   }
 }

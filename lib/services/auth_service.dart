@@ -14,6 +14,7 @@ class AuthService extends ChangeNotifier {
   bool get isAuthenticated => _user != null;
 
   AuthService() {
+    _user = _auth.currentUser;
     _auth.authStateChanges().listen((User? user) {
       _user = user;
       notifyListeners();

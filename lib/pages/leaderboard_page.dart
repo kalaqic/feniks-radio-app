@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,13 +8,10 @@ import '../models/leaderboard_entry.dart';
 import '../models/radio_player_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
-import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
-import '../theme/theme_provider.dart';
 import '../utils/log.dart';
-import '../widgets/app_card.dart';
 import '../widgets/common_footer.dart';
-import '../widgets/gradient_card.dart';
+import '../widgets/ui.dart';
 
 class LeaderboardPage extends StatefulWidget {
   const LeaderboardPage({super.key});
@@ -78,555 +77,464 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = colorsOf(context);
     final model = context.watch<RadioPlayerModel>();
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDarkMode = themeProvider.isDarkMode;
+    final loggedIn = context.watch<AuthService>().isAuthenticated;
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('Ljestvica'),
-        automaticallyImplyLeading: false,
-      ),
+      backgroundColor: colors.background,
       body: SafeArea(
         child: RefreshIndicator(
+          color: AppTheme.raspberry,
           onRefresh: _loadLeaderboard,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.fromLTRB(24, 22, 24, 32),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 20),
-
-                _buildPersonalPointsSection(model),
-
+                const FadeSlideIn(child: PageTitle('Ljestvica')),
                 const SizedBox(height: 24),
-
-                _buildLeaderboardSection(),
-
-                const SizedBox(height: 120),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 80),
+                  child: loggedIn
+                      ? _MyPoints(model: model, rank: _myRank)
+                      : const LoginPrompt(
+                          title: 'Želiš i ti na ljestvicu?',
+                          message:
+                              'Prijavi se i svaki minut slušanja donosi ti '
+                              '${ProgressRules.pointsPerMinute} poena.',
+                        ),
+                ),
+                const SizedBox(height: 16),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 160),
+                  child: _TopThree(
+                    entries: _leaderboard,
+                    loading: _loading,
+                    error: _error,
+                  ),
+                ),
               ],
             ),
           ),
         ),
       ),
-      bottomNavigationBar: CommonFooter(
-        currentRoute: Routes.leaderboard,
-        isDark: isDarkMode,
-      ),
+      bottomNavigationBar: const CommonFooter(currentRoute: Routes.leaderboard),
     );
   }
+}
 
-  Widget _buildPersonalPointsSection(RadioPlayerModel model) {
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDarkMode = themeProvider.isDarkMode;
-    final myRank = _myRank;
-    final myPoints = model.totalFeniksPoints;
+/// My points and rank. A tap opens where the points come from.
+class _MyPoints extends StatefulWidget {
+  const _MyPoints({required this.model, required this.rank});
 
-    return GradientCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  final RadioPlayerModel model;
+  final int? rank;
+
+  @override
+  State<_MyPoints> createState() => _MyPointsState();
+}
+
+class _MyPointsState extends State<_MyPoints> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final model = widget.model;
+    final rank = widget.rank;
+    const white = TextStyle(color: Colors.white);
+    return Semantics(
+      button: true,
+      expanded: _open,
+      label: 'Detalji poena',
+      child: Pressable(
+        scale: .99,
+        haptic: _open ? Haptic.selection : Haptic.light,
+        onTap: () => setState(() => _open = !_open),
+        child: Container(
+          color: AppTheme.raspberry,
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.emoji_events_rounded,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Moji Feniks Poeni',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: -0.3,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Moji Feniks poeni',
+                          style: white.copyWith(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        CountUp(
+                          value: model.totalFeniksPoints,
+                          style: white.copyWith(
+                            fontSize: 40,
+                            height: 1,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (rank != null)
+                        Text(
+                          '#$rank na ljestvici',
+                          style: white.copyWith(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _open ? 'Manje' : 'Detalji',
+                            style: white.copyWith(fontSize: 12),
+                          ),
+                          AnimatedRotation(
+                            turns: _open ? .5 : 0,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                            child: const Icon(
+                              Icons.expand_more,
+                              size: 18,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    Text(
-                      'Ukupno: $myPoints poena',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
-              if (myRank != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '#$myRank',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
+              RevealDrawer(open: _open, children: _details(model, white)),
             ],
           ),
-          const SizedBox(height: 24),
-
-          Row(
-            children: [
-              Expanded(
-                child: _buildPointsCard(
-                  'Značke (broj)',
-                  '${model.earnedAchievements.length}',
-                  Icons.military_tech_rounded,
-                  Colors.white.withValues(alpha: 0.9),
-                  const Color(0xFFFFD700),
-                  isDarkMode,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildPointsCard(
-                  'Poeni od znački',
-                  '${model.achievementPoints}',
-                  Icons.star_rounded,
-                  Colors.white.withValues(alpha: 0.9),
-                  const Color(0xFFFFD700),
-                  isDarkMode,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildPointsCard(
-                  'Minuta slušanja',
-                  '${model.totalListeningMinutes}',
-                  Icons.headphones_rounded,
-                  Colors.white.withValues(alpha: 0.9),
-                  AppTheme.primary,
-                  isDarkMode,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildPointsCard(
-                  'Poeni od slušanja',
-                  '${model.listeningPoints}',
-                  Icons.graphic_eq_rounded,
-                  Colors.white.withValues(alpha: 0.9),
-                  AppTheme.primary,
-                  isDarkMode,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPointsCard(
-    String label,
-    String value,
-    IconData icon,
-    Color bgColor,
-    Color iconColor,
-    bool isDarkMode,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDarkMode ? AppTheme.cardBackground : bgColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDarkMode
-              ? AppTheme.cardBorder
-              : Colors.white.withValues(alpha: 0.3),
-          width: 1,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: iconColor, size: 20),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: AppColors.of(isDarkMode).primaryText,
-              letterSpacing: -0.3,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: AppColors.of(isDarkMode).secondaryText,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _buildLeaderboardSection() {
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDarkMode = themeProvider.isDarkMode;
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFFFBBF24), Color(0xFFF59E0B)],
-                  ),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.leaderboard_rounded,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Top 3 Feniks Poeni',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.of(isDarkMode).primaryText,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    Text(
-                      'Najbolji slušaoci svih vremena',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.of(isDarkMode).secondaryText,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Poredak po ukupnim Feniks poenima: ${ProgressRules.pointsPerMinute} poena za svaki minut slušanja + poeni od znački.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDarkMode
-                            ? AppTheme.textMuted
-                            : const Color(0xFF8E8E93),
-                        fontWeight: FontWeight.w400,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+  List<Widget> _details(RadioPlayerModel model, TextStyle white) {
+    return [
+        Padding(
+          padding: const EdgeInsets.only(top: 18, bottom: 16),
+          child: Container(
+            height: 1,
+            color: Colors.white.withValues(alpha: .3),
           ),
-          const SizedBox(height: 24),
-
-          if (_loading)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_error != null)
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                _error!,
-                style: TextStyle(
-                  color: AppColors.of(isDarkMode).secondaryText,
-                  fontSize: 14,
-                ),
-                textAlign: TextAlign.center,
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: _Stat(
+                value: model.totalListeningMinutes,
+                label: 'Minuta slušanja',
               ),
-            )
-          else if (_leaderboard.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                'Još nema podataka. Budite prvi na ljestvici!',
-                style: TextStyle(
-                  color: AppColors.of(isDarkMode).secondaryText,
-                  fontSize: 14,
-                ),
-                textAlign: TextAlign.center,
+            ),
+            Expanded(
+              child: _Stat(
+                value: model.listeningPoints,
+                label: 'Poeni od slušanja',
               ),
-            )
-          else ...[
-            if (_leaderboard.length >= 3) _buildTopThreePodium(),
-            if (_leaderboard.length > 3) const SizedBox(height: 24),
-
-            ...List.generate(
-              _leaderboard.length >= 3
-                  ? _leaderboard.length - 3
-                  : _leaderboard.length,
-              (index) {
-                final user =
-                    _leaderboard[_leaderboard.length >= 3 ? index + 3 : index];
-                final auth = context.read<AuthService>();
-                final isCurrentUser =
-                    auth.isAuthenticated &&
-                    auth.user != null &&
-                    user.uid == auth.user!.uid;
-                return _buildLeaderboardItem(user, isCurrentUser);
-              },
             ),
           ],
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: _Stat(
+                value: model.earnedAchievements.length,
+                label: 'Značke',
+              ),
+            ),
+            Expanded(
+              child: _Stat(
+                value: model.achievementPoints,
+                label: 'Poeni od znački',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Svaki minut slušanja donosi ${ProgressRules.pointsPerMinute} '
+          'poena, a svaka značka dodatne poene.',
+          style: white.copyWith(fontSize: 13, height: 1.5),
+        ),
+    ];
+  }
+}
+
+class _Stat extends StatelessWidget {
+  const _Stat({required this.value, required this.label});
+
+  final int value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CountUp(
+          value: value,
+          delay: const Duration(milliseconds: 500),
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w500,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w400,
+            color: Colors.white,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TopThree extends StatelessWidget {
+  const _TopThree({
+    required this.entries,
+    required this.loading,
+    required this.error,
+  });
+
+  final List<LeaderboardEntry> entries;
+  final bool loading;
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+
+    final Widget body;
+    if (loading) {
+      body = const Padding(
+        padding: EdgeInsets.symmetric(vertical: 48),
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    } else if (error != null || entries.isEmpty) {
+      body = Padding(
+        padding: const EdgeInsets.only(bottom: 22),
+        child: Text(
+          error ?? 'Još nema podataka. Budi prvi na ljestvici!',
+          style: TextStyle(fontSize: 15, color: colors.muted),
+        ),
+      );
+    } else {
+      LeaderboardEntry? at(int rank) =>
+          entries.where((e) => e.rank == rank).firstOrNull;
+      body = Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: _Podium(
+              entry: at(2),
+              place: 2,
+              height: 96,
+              color: AppTheme.blue,
+              delay: 450,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _Podium(
+              entry: at(1),
+              place: 1,
+              height: 136,
+              color: AppTheme.raspberry,
+              delay: 300,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _Podium(
+              entry: at(3),
+              place: 3,
+              height: 70,
+              color: AppTheme.coral,
+              delay: 600,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      color: colors.surface,
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Top 3',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+              color: colors.ink,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Najbolji slušaoci svih vremena',
+            style: TextStyle(fontSize: 14, color: colors.muted),
+          ),
+          const SizedBox(height: 20),
+          body,
         ],
       ),
     );
   }
+}
 
-  Widget _buildTopThreePodium() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        _buildPodiumPlace(_leaderboard[1], 2, 80, const Color(0xFFE5E7EB)),
+class _Podium extends StatelessWidget {
+  const _Podium({
+    required this.entry,
+    required this.place,
+    required this.height,
+    required this.color,
+    required this.delay,
+  });
 
-        _buildPodiumPlace(_leaderboard[0], 1, 100, const Color(0xFFFBBF24)),
+  final LeaderboardEntry? entry;
+  final int place;
+  final double height;
+  final Color color;
+  final int delay;
 
-        _buildPodiumPlace(_leaderboard[2], 3, 60, const Color(0xFFCD7F32)),
-      ],
-    );
-  }
-
-  Widget _buildPodiumPlace(
-    LeaderboardEntry user,
-    int place,
-    double height,
-    Color color,
-  ) {
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    final entry = this.entry;
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            shape: BoxShape.circle,
-            border: Border.all(color: color, width: 2),
-          ),
-          child: Center(
-            child: Text(
-              user.initial,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: place == 2 ? const Color(0xFF8E8E93) : color,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          user.shortName,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: context.read<ThemeProvider>().isDarkMode
-                ? AppTheme.textPrimary
-                : const Color(0xFF1D1D1F),
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '${user.points} p',
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.grey.shade600,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: 60,
-          height: height,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(8),
-              topRight: Radius.circular(8),
-            ),
-          ),
-          child: Center(
-            child: Text(
-              '$place',
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLeaderboardItem(LeaderboardEntry user, bool isCurrentUser) {
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDarkMode = themeProvider.isDarkMode;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isCurrentUser
-            ? AppTheme.primaryWithOpacity(0.1)
-            : AppColors.of(isDarkMode).surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isCurrentUser
-              ? AppTheme.primaryWithOpacity(0.3)
-              : AppColors.of(isDarkMode).border,
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: _getRankColor(user.rank).withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-              border: Border.all(color: _getRankColor(user.rank), width: 1),
-            ),
-            child: Center(
-              child: Text(
-                '${user.rank}',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: _getRankColor(user.rank),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Center(
-              child: Text(
-                user.initial,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.primary,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  user.name,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.of(isDarkMode).primaryText,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${user.achievementCount} znački',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.of(isDarkMode).secondaryText,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${user.points} p',
+                entry?.shortName ?? '—',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.of(isDarkMode).primaryText,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: colors.ink,
                 ),
               ),
+              const SizedBox(height: 2),
               Text(
-                'Feniks Poeni',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: AppColors.of(isDarkMode).secondaryText,
-                ),
+                entry == null ? '' : '${formatNumber(entry.points)} p',
+                style: TextStyle(fontSize: 12, color: colors.muted),
               ),
             ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+        _Grow(
+          delay: Duration(milliseconds: delay),
+          child: Container(
+            width: double.infinity,
+            height: height,
+            color: color,
+            alignment: Alignment.bottomLeft,
+            padding: const EdgeInsets.all(10),
+            child: Text(
+              '$place',
+              style: TextStyle(
+                fontSize: switch (place) {
+                  1 => 40,
+                  2 => 32,
+                  _ => 28,
+                },
+                height: 1,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.onBrand(color),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
+}
 
-  Color _getRankColor(int rank) {
-    switch (rank) {
-      case 1:
-        return const Color(0xFFFBBF24);
-      case 2:
-        return const Color(0xFFE5E7EB);
-      case 3:
-        return const Color(0xFFCD7F32);
-      case 4:
-        return AppTheme.primary;
-      default:
-        return const Color(0xFF8E8E93);
-    }
+/// Grows its child up from the bottom once.
+class _Grow extends StatefulWidget {
+  const _Grow({required this.child, required this.delay});
+
+  final Widget child;
+  final Duration delay;
+
+  @override
+  State<_Grow> createState() => _GrowState();
+}
+
+class _GrowState extends State<_Grow> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  );
+  late final Animation<double> _curve = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(widget.delay, () {
+      if (mounted) _controller.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _curve,
+      child: widget.child,
+      builder: (context, child) => Transform(
+        alignment: Alignment.bottomCenter,
+        transform: Matrix4.diagonal3Values(1, _curve.value, 1),
+        child: child,
+      ),
+    );
   }
 }

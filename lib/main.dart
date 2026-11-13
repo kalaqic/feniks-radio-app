@@ -7,6 +7,7 @@ import 'config/routes.dart';
 import 'firebase_options.dart';
 import 'models/radio_player_model.dart';
 import 'pages/badges_page.dart';
+import 'pages/change_password_page.dart';
 import 'pages/favorites_page.dart';
 import 'pages/home_page.dart';
 import 'pages/leaderboard_page.dart';
@@ -48,18 +49,24 @@ class FeniksApp extends StatelessWidget {
           navigatorKey: navigatorKey,
           theme: themeProvider.currentTheme,
           initialRoute: Routes.loading,
-          onGenerateRoute: (settings) => FadePageRoute<void>(
-            page: _pageFor(settings.name),
-            settings: settings,
-          ),
+          onGenerateRoute: (settings) {
+            final fromLanding = settings.arguments == HomePage.landingArgument;
+            return FadePageRoute<void>(
+              page: _pageFor(settings),
+              settings: settings,
+              duration: fromLanding
+                  ? const Duration(milliseconds: 900)
+                  : const Duration(milliseconds: 300),
+            );
+          },
         ),
       ),
     );
   }
 }
 
-Widget _pageFor(String? routeName) {
-  switch (routeName) {
+Widget _pageFor(RouteSettings settings) {
+  switch (settings.name) {
     case Routes.loading:
       return const LoadingScreen();
     case Routes.welcome:
@@ -76,7 +83,11 @@ Widget _pageFor(String? routeName) {
       return const ProfilePage();
     case Routes.settings:
       return const SettingsPage();
+    case Routes.changePassword:
+      return const ChangePasswordPage();
     default:
-      return const HomePage();
+      return HomePage(
+        fromLanding: settings.arguments == HomePage.landingArgument,
+      );
   }
 }

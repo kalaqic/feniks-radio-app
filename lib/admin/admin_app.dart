@@ -1,8 +1,11 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/theme_provider.dart';
+import '../widgets/ui.dart';
 import 'admin_dashboard_page.dart';
 import 'admin_data.dart';
 
@@ -11,15 +14,16 @@ class AdminApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Feniks Admin',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: AppTheme.primary,
-        scaffoldBackgroundColor: const Color(0xFFF5F5F7),
+    // Same theme and shared widgets as the app; they read the colors from
+    // a ThemeProvider.
+    return ChangeNotifierProvider(
+      create: (_) => ThemeProvider(),
+      child: MaterialApp(
+        title: 'Feniks Admin',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeProvider.lightTheme,
+        home: const _AuthGate(),
       ),
-      home: const _AuthGate(),
     );
   }
 }
@@ -33,7 +37,7 @@ class _AuthGate extends StatelessWidget {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const _Loading();
+          return const AdminLoading();
         }
         final user = snapshot.data;
         if (user == null) return const AdminLoginPage();
@@ -42,7 +46,7 @@ class _AuthGate extends StatelessWidget {
           future: AdminRepository().isAdmin(user.uid),
           builder: (context, admin) {
             if (admin.connectionState != ConnectionState.done) {
-              return const _Loading();
+              return const AdminLoading();
             }
             if (admin.data == true) return const AdminDashboardPage();
             return const _NotAdmin();
@@ -53,12 +57,74 @@ class _AuthGate extends StatelessWidget {
   }
 }
 
-class _Loading extends StatelessWidget {
-  const _Loading();
+/// Bouncing equalizer bars while something loads.
+class AdminLoading extends StatelessWidget {
+  const AdminLoading({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    final colors = colorsOf(context);
+    return Scaffold(
+      backgroundColor: colors.background,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const EqualizerBars(
+              active: true,
+              height: 28,
+              color: AppTheme.raspberry,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Učitavanje…',
+              style: TextStyle(fontSize: 13, color: colors.muted),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// White card in the middle of the screen with the brand stripe on top.
+class _CenterCard extends StatelessWidget {
+  const _CenterCard({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    return Scaffold(
+      backgroundColor: colors.background,
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: FadeSlideIn(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Container(
+                color: colors.surface,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const BrandStripe(height: 6),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(32, 36, 32, 32),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: children,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -67,25 +133,25 @@ class _NotAdmin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.lock_outline, size: 48),
-            const SizedBox(height: 16),
-            const Text(
-              'Ovaj nalog nema admin pristup.',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton(
-              onPressed: () => FirebaseAuth.instance.signOut(),
-              child: const Text('Odjavi se'),
-            ),
-          ],
+    final colors = colorsOf(context);
+    return _CenterCard(
+      children: [
+        const Icon(Icons.lock_outline_rounded, size: 36, color: AppTheme.coral),
+        const SizedBox(height: 18),
+        const PageTitle('Nema pristupa', fontSize: 28),
+        const SizedBox(height: 10),
+        Text(
+          'Ovaj nalog nema admin pristup. Prijavi se nalogom koji je dodan u '
+          'listu admina.',
+          style: TextStyle(fontSize: 15, height: 1.55, color: colors.text),
         ),
-      ),
+        const SizedBox(height: 24),
+        PillButton(
+          label: 'Odjavi se',
+          style: PillStyle.outline,
+          onPressed: () => FirebaseAuth.instance.signOut(),
+        ),
+      ],
     );
   }
 }
@@ -111,6 +177,7 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
   }
 
   Future<void> _signIn() async {
+    if (_busy) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -127,7 +194,7 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
     } on FirebaseAuthException {
       _error = 'Pogrešno korisničko ime ili lozinka.';
     } catch (_) {
-      _error = 'Prijava nije uspjela. Provjerite internet konekciju.';
+      _error = 'Prijava nije uspjela. Provjeri internet konekciju.';
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -135,69 +202,64 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 380),
-          child: Card(
-            margin: const EdgeInsets.all(24),
-            child: Padding(
-              padding: const EdgeInsets.all(28),
-              child: AutofillGroup(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Feniks Admin',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 24),
-                    TextField(
-                      controller: _username,
-                      autofillHints: const [AutofillHints.username],
-                      decoration: const InputDecoration(
-                        labelText: 'Korisničko ime',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _password,
-                      obscureText: true,
-                      autofillHints: const [AutofillHints.password],
-                      onSubmitted: (_) => _signIn(),
-                      decoration: const InputDecoration(
-                        labelText: 'Lozinka',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _error!,
-                        style: TextStyle(color: Theme.of(context).colorScheme.error),
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    FilledButton(
-                      onPressed: _busy ? null : _signIn,
-                      child: _busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Prijavi se'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+    final colors = colorsOf(context);
+    return _CenterCard(
+      children: [
+        Center(
+          child: Image.asset(
+            'lib/assets/png/horizontal_logo.png',
+            width: 150,
+            fit: BoxFit.contain,
           ),
         ),
-      ),
+        const SizedBox(height: 28),
+        const PageTitle('Admin', fontSize: 30),
+        const SizedBox(height: 6),
+        Text(
+          'Statistika slušanja Feniks Radija.',
+          style: TextStyle(fontSize: 14, color: colors.muted),
+        ),
+        const SizedBox(height: 26),
+        AutofillGroup(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              LabeledField(
+                label: 'Korisničko ime',
+                controller: _username,
+                autofillHints: const [AutofillHints.username],
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 20),
+              LabeledField(
+                label: 'Lozinka',
+                controller: _password,
+                obscureText: true,
+                autofillHints: const [AutofillHints.password],
+                onSubmitted: (_) => _signIn(),
+              ),
+            ],
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          child: _error == null
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppTheme.raspberry,
+                    ),
+                  ),
+                ),
+        ),
+        const SizedBox(height: 26),
+        PillButton(label: 'Prijavi se', loading: _busy, onPressed: _signIn),
+      ],
     );
   }
 }

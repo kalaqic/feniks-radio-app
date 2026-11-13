@@ -45,7 +45,21 @@ class RadioPlayerModel extends ChangeNotifier {
   late final ProgressSync _sync;
 
   AudioPlayer? _playerInstance;
-  AudioPlayer get _player => _playerInstance ??= AudioPlayer();
+  AudioPlayer get _player => _playerInstance ??= AudioPlayer(
+    // A live 320 kbps stream: keep a bigger buffer so short network hiccups
+    // do not cut the sound.
+    audioLoadConfiguration: const AudioLoadConfiguration(
+      darwinLoadControl: DarwinLoadControl(
+        preferredForwardBufferDuration: Duration(seconds: 20),
+      ),
+      androidLoadControl: AndroidLoadControl(
+        minBufferDuration: Duration(seconds: 15),
+        maxBufferDuration: Duration(seconds: 60),
+        bufferForPlaybackDuration: Duration(seconds: 3),
+        bufferForPlaybackAfterRebufferDuration: Duration(seconds: 6),
+      ),
+    ),
+  );
   MetadataService? _metadataInstance;
   MetadataService get _metadata => _metadataInstance ??= MetadataService();
 
@@ -65,25 +79,46 @@ class RadioPlayerModel extends ChangeNotifier {
             .catchError((Object e) => logError('Scheduling reminders', e)),
       );
     }
+    // The song is polled from the start, also while the radio is off.
+    // Loading the stream can wait until the first play on iOS, so polling
+    // must not depend on it.
+    _metadata.metadataStream?.listen(_updateCurrentSong);
+    _metadata.start();
+    if (kDebugMode) {
+      // Every change, to see whether the cuts are the network (buffering).
+      _player.processingStateStream.listen(
+        (state) => debugPrint('[Feniks] player ${DateTime.now()} $state'),
+      );
+    }
+    _player.playingStream.listen((playing) {
+      _metadata.streamPlaying = playing;
+    });
     try {
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
       await _player.setAudioSource(
         AudioSource.uri(Uri.parse(AppConfig.streamUrl)),
       );
-      await _player.setVolume(_settings.volume);
+      // Volume is left to the phone's buttons. 80 % leaves some headroom:
+      // at full gain the loud stream peaks and sounds distorted.
+      await _player.setVolume(.8);
     } catch (e) {
       logError('Initializing the audio player', e);
     }
     _lifecycle = AppLifecycleListener(
       onStateChange: (state) {
-        _appInForeground = state == AppLifecycleState.resumed;
+        final resumed = state == AppLifecycleState.resumed;
+        if (resumed && !_appInForeground) {
+          // Polls again and fetches right away, the song may have changed.
+          _metadata.start();
+        } else if (!resumed && _appInForeground && !_player.playing) {
+          // Nobody sees the song now, no need to keep asking.
+          _metadata.pause();
+        }
+        _appInForeground = resumed;
         _reportPresence();
       },
     );
-    _metadata.start();
-    _metadata.metadataStream?.listen(_updateCurrentSong);
-    unawaited(updateSong());
     _startTicker();
     notifyListeners();
   }
@@ -170,6 +205,13 @@ class RadioPlayerModel extends ChangeNotifier {
   String get currentArtist => _currentArtist;
   bool get isFetchingCurrentSong => _isFetchingCurrentSong;
 
+  /// A studio announcement (for example the phone number), not a song: it
+  /// is shown, but not counted, saved as a favorite or kept in the history.
+  bool get isStationInfo =>
+      isFallbackSong ||
+      _currentArtist.toLowerCase() ==
+          MetadataService.stationArtist.toLowerCase();
+
   bool get isFallbackSong {
     final title = _currentSong.trim().toLowerCase();
     return title.isEmpty || title == kFallbackTitle.toLowerCase();
@@ -182,7 +224,7 @@ class RadioPlayerModel extends ChangeNotifier {
     _isFetchingCurrentSong = true;
     notifyListeners();
     try {
-      _updateCurrentSong(await _metadata.getCurrentMetadata());
+      _updateCurrentSong(await _metadata.refresh());
     } finally {
       _isFetchingCurrentSong = false;
       notifyListeners();
@@ -192,19 +234,37 @@ class RadioPlayerModel extends ChangeNotifier {
   void _updateCurrentSong(Map<String, String> metadata) {
     if (metadata.isEmpty) return;
 
-    _currentSong = TextFormatting.formatTitle(
-      metadata['title'] ?? kFallbackTitle,
+    final title = TextFormatting.formatTitle(
+      TextFormatting.cleanSongText(metadata['title'] ?? kFallbackTitle),
     );
-    _currentArtist = TextFormatting.formatArtist(
-      metadata['artist'] ?? kFallbackArtist,
+    final artist = TextFormatting.formatArtist(
+      TextFormatting.cleanSongText(metadata['artist'] ?? kFallbackArtist),
     );
+    // Polls repeat the same song most of the time.
+    if (title == _currentSong && artist == _currentArtist) return;
+    if (!isStationInfo) {
+      final previous = currentSongDisplay;
+      _recentSongs
+        ..remove(previous)
+        ..insert(0, previous);
+      if (_recentSongs.length > 4) _recentSongs.removeLast();
+    }
+    _currentSong = title;
+    _currentArtist = artist;
     _isFetchingCurrentSong = false;
+    _recentSongs.remove(currentSongDisplay);
     _countCurrentSong();
     notifyListeners();
   }
 
+  final List<String> _recentSongs = [];
+
+  /// Up to four songs that played before the current one, newest first.
+  /// Only remembered while the app is open.
+  List<String> get recentSongs => List.unmodifiable(_recentSongs);
+
   void _countCurrentSong() {
-    if (!isFallbackSong) _progress.songHeard(currentSongDisplay);
+    if (!isStationInfo) _progress.songHeard(currentSongDisplay);
   }
 
   List<String> get favoriteSongs => _progress.favorites;
@@ -215,12 +275,21 @@ class RadioPlayerModel extends ChangeNotifier {
     final song = currentSongDisplay;
     if (_progress.isFavorite(song)) {
       _progress.removeFavorite(song);
-    } else if (!isFallbackSong) {
+    } else if (!isStationInfo) {
       _progress.addFavorite(song);
     }
   }
 
   void removeFavorite(String song) => _progress.removeFavorite(song);
+
+  /// Adds or removes any song, for example one that played earlier.
+  void toggleFavoriteSong(String song) {
+    if (_progress.isFavorite(song)) {
+      _progress.removeFavorite(song);
+    } else {
+      _progress.addFavorite(song);
+    }
+  }
 
   int get todayListeningMinutes => _progress.todayMinutes;
   int get totalListeningMinutes => _progress.totalMinutes;
@@ -228,6 +297,9 @@ class RadioPlayerModel extends ChangeNotifier {
   int get sessionCount => _progress.sessionCount;
 
   int get consecutiveDays => _progress.streak;
+
+  /// True once today already counts towards [consecutiveDays].
+  bool get listenedToday => _progress.listenedToday;
 
   int get listeningPoints => _progress.listeningPoints;
   int get achievementPoints => _progress.achievementPoints;
@@ -263,7 +335,9 @@ class RadioPlayerModel extends ChangeNotifier {
 
   void loadUserProgress(String uid, Map<String, dynamic>? data) {
     final unsaved = _sync.loadedUserId == null ? _progress.snapshot() : null;
-    _progress.loadJson(data ?? const {});
+    _progress
+      ..achievementsEnabled = true
+      ..loadJson(data ?? const {});
     if (unsaved != null) _progress.mergeUnsaved(unsaved);
     _sync.loadedUserId = uid;
     notifyListeners();
@@ -271,8 +345,13 @@ class RadioPlayerModel extends ChangeNotifier {
 
   void resetProgress() {
     _sync.loadedUserId = null;
-    _progress.reset();
+    _progress
+      ..achievementsEnabled = false
+      ..reset();
   }
+
+  /// Achievements are only unlocked for logged-in users.
+  set achievementsEnabled(bool value) => _progress.achievementsEnabled = value;
 
   Map<String, dynamic> progressToJson() => _progress.toJson();
 
@@ -324,10 +403,21 @@ class RadioPlayerModel extends ChangeNotifier {
 
   bool _celebrationShown = false;
 
-  bool get shouldShowCelebration => !_celebrationShown;
+  static String _dayKey(DateTime d) => '${d.year}-${d.month}-${d.day}';
+
+  /// The streak popup comes at most once a day, and only once there is a
+  /// streak to continue (yesterday was a listening day).
+  bool get shouldShowCelebration {
+    if (_celebrationShown) return false;
+    if (_settings.celebrationDay == _dayKey(DateTime.now())) return false;
+    final pastDays = listenedToday ? consecutiveDays - 1 : consecutiveDays;
+    return pastDays >= 1;
+  }
 
   void markCelebrationShown() {
     _celebrationShown = true;
+    _settings.celebrationDay = _dayKey(DateTime.now());
+    _settings.save();
     notifyListeners();
   }
 }

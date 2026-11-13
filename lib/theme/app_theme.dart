@@ -1,33 +1,27 @@
 import 'package:flutter/material.dart';
 
+/// Brand colors and font, taken from radiofeniks.com.
 abstract final class AppTheme {
+  static const String fontFamily = 'Lexend';
+
+  static const Color raspberry = Color(0xFFA65262);
+  static const Color coral = Color(0xFFDC6D5D);
+  static const Color blue = Color(0xFF6AA0DA);
+
+  /// Orange used between coral and blue on the landing play button.
+  static const Color orange = Color(0xFFE8894A);
+
+  static const Color ink = Color(0xFF151515);
+  static const Color text = Color(0xFF212529);
+  static const Color button = Color(0xFF343A40);
+  static const Color paper = Color(0xFFFAF9F8);
+  static const Color white = Colors.white;
+
+  /// Accent colors of the admin panel.
   static const Color primary = Color(0xFFEB6556);
-  static const Color primaryLight = Color(0xFFFF8A75);
   static const Color primaryDark = Color(0xFFD54532);
-  static const Color accentDark = Color(0xFFE55039);
 
-  static const Color background = Color(0xFF0A0A0F);
-  static const Color backgroundLight = Color(0xFF1A1A2E);
-  static const Color backgroundMedium = Color(0xFF16213E);
-
-  static const Color textPrimary = Colors.white;
-  static const Color textSecondary = Color(0xFFB0B0B0);
-  static const Color textMuted = Color(0xFF8E8E93);
-
-  static const Color cardBackground = Color(0x08FFFFFF);
-  static const Color cardBorder = Color(0x14FFFFFF);
-
-  static const LinearGradient primaryGradient = LinearGradient(
-    colors: [primary, primaryDark],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  static const RadialGradient backgroundGradient = RadialGradient(
-    radius: 1.2,
-    colors: [backgroundLight, backgroundMedium, background],
-  );
-
-  static Color primaryWithOpacity(double opacity) =>
-      primary.withValues(alpha: opacity);
+  /// Text and icon color that reads well on top of [background].
+  static Color onBrand(Color background) =>
+      background == raspberry || background == button ? white : ink;
 }

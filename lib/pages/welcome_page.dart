@@ -8,10 +8,9 @@ import 'package:provider/provider.dart';
 import '../config/routes.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
-import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
-import '../theme/theme_provider.dart';
 import '../utils/log.dart';
+import '../widgets/ui.dart';
 
 class WelcomePage extends StatefulWidget {
   const WelcomePage({super.key});
@@ -21,18 +20,22 @@ class WelcomePage extends StatefulWidget {
 }
 
 class _WelcomePageState extends State<WelcomePage> {
-  bool _showRegisterForm = false;
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  bool _obscurePassword = true;
-  bool _obscureConfirm = true;
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
+    for (final c in [
+      _nameController,
+      _passwordController,
+      _confirmPasswordController,
+    ]) {
+      c.addListener(_refresh);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthService>();
       if (auth.isAuthenticated && mounted) {
@@ -44,6 +47,8 @@ class _WelcomePageState extends State<WelcomePage> {
       }
     });
   }
+
+  void _refresh() => setState(() {});
 
   @override
   void dispose() {
@@ -60,13 +65,10 @@ class _WelcomePageState extends State<WelcomePage> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    Haptics.play(Haptic.warning);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _handleCreateAccount() async {
@@ -156,308 +158,191 @@ class _WelcomePageState extends State<WelcomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDarkMode = themeProvider.isDarkMode;
+    final colors = colorsOf(context);
+    final name = _nameController.text.trim();
+    final password = _passwordController.text;
+    final checks = [
+      (
+        'Korisničko ime od najmanje 3 slova, brojeva ili _',
+        RegExp(r'^[a-zA-Z0-9_]{3,}$').hasMatch(name),
+      ),
+      ('Lozinka od najmanje 6 znakova', password.length >= 6),
+      (
+        'Lozinke se poklapaju',
+        password.isNotEmpty && password == _confirmPasswordController.text,
+      ),
+    ];
+    final ready = checks.every((c) => c.$2);
 
-    return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
+    return Form(
+      key: _formKey,
+      child: StripedPage(
+        top: 24,
+        horizontal: 28,
+        gap: 28,
         children: [
-          Positioned.fill(
-            child: Opacity(
-              opacity: 0.1,
-              child: Image.asset(
-                'lib/assets/png/background_decoration.png',
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-          SafeArea(
-            child: _showRegisterForm
-                ? _buildRegisterForm(isDarkMode)
-                : _buildWelcome(isDarkMode),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWelcome(bool isDarkMode) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Spacer(flex: 2),
-          Image.asset(
-            'lib/assets/png/horizontal_logo.png',
-            height: 80,
-            fit: BoxFit.contain,
-          ),
-          const Spacer(flex: 2),
-
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: Material(
-              color: Colors.red,
-              borderRadius: BorderRadius.circular(16),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () => setState(() => _showRegisterForm = true),
-                child: const Center(
-                  child: Text(
-                    'Napravi svoj račun',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          TextButton(
-            onPressed: () => Navigator.pushNamed(context, Routes.login),
-            child: Text(
-              'Već imate račun? Prijavite se',
-              style: TextStyle(
-                fontSize: 15,
-                color: isDarkMode ? AppTheme.primaryLight : AppTheme.primary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const Spacer(flex: 2),
-        ],
-      ),
-    );
-  }
-
-  InputDecoration _loginStyleDecoration(String label, {Widget? suffixIcon}) {
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDarkMode = themeProvider.isDarkMode;
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: label == 'Korisničko ime'
-          ? const Icon(Icons.person_outline)
-          : const Icon(Icons.lock_outline),
-      suffixIcon: suffixIcon,
-      filled: true,
-      fillColor: AppColors.of(isDarkMode).card,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: AppColors.of(isDarkMode).border),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: AppColors.of(isDarkMode).border),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppTheme.primary, width: 2),
-      ),
-    );
-  }
-
-  Widget _buildRegisterForm(bool isDarkMode) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 40),
-            IconButton(
+          FadeSlideIn(
+            child: Align(
               alignment: Alignment.centerLeft,
-              padding: EdgeInsets.zero,
-              icon: Icon(
-                Icons.chevron_left,
-                color: isDarkMode ? Colors.white : AppTheme.primary,
-                size: 32,
-              ),
-              onPressed: () => setState(() => _showRegisterForm = false),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppTheme.primary, AppTheme.primaryDark],
-                ),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryWithOpacity(0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.radio, color: Colors.white, size: 50),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Napravi račun',
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.w700,
-                color: AppColors.of(isDarkMode).primaryText,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Unesite korisničko ime i lozinku',
-              style: TextStyle(
-                fontSize: 16,
-                color: AppColors.of(isDarkMode).secondaryText,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 40),
-            TextFormField(
-              controller: _nameController,
-              textCapitalization: TextCapitalization.none,
-              autocorrect: false,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_]')),
-                LengthLimitingTextInputFormatter(20),
-              ],
-              decoration: _loginStyleDecoration('Korisničko ime'),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) {
-                  return 'Molimo unesite korisničko ime';
-                }
-                if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(v)) {
-                  return 'Samo slova, brojeve i _ (bez razmaka ili specijalnih znakova)';
-                }
-                if (v.trim().length < 3) {
-                  return 'Korisničko ime mora imati najmanje 3 karaktera';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _passwordController,
-              obscureText: _obscurePassword,
-              decoration: _loginStyleDecoration('Lozinka').copyWith(
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                  ),
-                  onPressed: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
-                ),
-              ),
-              validator: (v) {
-                if (v == null || v.isEmpty) return 'Molimo unesite lozinku';
-                if (v.length < 6) {
-                  return 'Lozinka mora imati najmanje 6 karaktera';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _confirmPasswordController,
-              obscureText: _obscureConfirm,
-              decoration: _loginStyleDecoration('Potvrdi lozinku').copyWith(
-                prefixIcon: const Icon(Icons.lock_outline),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscureConfirm
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                  ),
-                  onPressed: () =>
-                      setState(() => _obscureConfirm = !_obscureConfirm),
-                ),
-              ),
-              validator: (v) {
-                if (v != _passwordController.text) {
-                  return 'Lozinke se ne poklapaju';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 24),
-            Container(
-              height: 56,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppTheme.primary, AppTheme.primaryDark],
-                ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryWithOpacity(0.3),
-                    blurRadius: 15,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: _isLoading ? null : _handleCreateAccount,
-                  child: Center(
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Text(
-                            'Kreiraj račun',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                  ),
-                ),
+              child: Image.asset(
+                'lib/assets/png/horizontal_logo.png',
+                width: 96,
               ),
             ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+          ),
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 80),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const PageTitle('Napravi nalog'),
+                const SizedBox(height: 8),
                 Text(
-                  'Već imate račun? ',
+                  'Treba ti samo korisničko ime i lozinka.',
                   style: TextStyle(
-                    color: AppColors.of(isDarkMode).secondaryText,
-                    fontSize: 14,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pushNamed(context, Routes.login),
-                  child: const Text(
-                    'Prijavite se',
-                    style: TextStyle(
-                      color: AppTheme.primary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    fontSize: 16,
+                    height: 1.55,
+                    color: colors.text,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 40),
-          ],
-        ),
+          ),
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 160),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                LabeledField(
+                  label: 'Korisničko ime',
+                  controller: _nameController,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.newUsername],
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_]')),
+                    LengthLimitingTextInputFormatter(20),
+                  ],
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Molimo unesite korisničko ime';
+                    }
+                    if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(v)) {
+                      return 'Samo slova, brojevi i _';
+                    }
+                    if (v.trim().length < 3) {
+                      return 'Najmanje 3 karaktera';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 22),
+                LabeledField(
+                  label: 'Lozinka',
+                  controller: _passwordController,
+                  obscureText: true,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.newPassword],
+                  validator: (v) {
+                    if (v == null || v.isEmpty) {
+                      return 'Molimo unesite lozinku';
+                    }
+                    if (v.length < 6) return 'Najmanje 6 karaktera';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 22),
+                LabeledField(
+                  label: 'Ponovi lozinku',
+                  controller: _confirmPasswordController,
+                  obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  autofillHints: const [AutofillHints.newPassword],
+                  onSubmitted: (_) => _isLoading ? null : _handleCreateAccount(),
+                  validator: (v) => v != _passwordController.text
+                      ? 'Lozinke se ne poklapaju'
+                      : null,
+                ),
+                const SizedBox(height: 20),
+                for (final (i, (label, ok)) in checks.indexed) ...[
+                  if (i > 0) const SizedBox(height: 8),
+                  _Check(label: label, ok: ok),
+                ],
+              ],
+            ),
+          ),
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 240),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+              children: [
+                PillButton(
+                  label: 'Napravi nalog',
+                  height: 54,
+                  fontSize: 16,
+                  loading: _isLoading,
+                  faded: !ready,
+                  onPressed: _handleCreateAccount,
+                ),
+                const SizedBox(height: 18),
+                TextLink(
+                  'Već imaš nalog? Prijavi se',
+                  padding: EdgeInsets.zero,
+                  onTap: () => Navigator.pushNamed(context, Routes.login),
+                ),
+              ],
+            ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One rule under the registration form; turns blue when it is met.
+class _Check extends StatelessWidget {
+  const _Check({required this.label, required this.ok});
+
+  final String label;
+  final bool ok;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    return Padding(
+      padding: EdgeInsets.zero,
+      child: Row(
+        children: [
+          AnimatedScale(
+            scale: ok ? 1 : .85,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutBack,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: ok ? AppTheme.blue : colors.track,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check, size: 11, color: Colors.white),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 300),
+              style: TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontSize: 13,
+                fontWeight: FontWeight.w300,
+                color: ok ? colors.ink : colors.muted,
+              ),
+              child: Text(label),
+            ),
+          ),
+        ],
       ),
     );
   }
