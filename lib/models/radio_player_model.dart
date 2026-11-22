@@ -7,6 +7,7 @@ import 'package:just_audio/just_audio.dart';
 
 import '../config/app_config.dart';
 import '../services/app_settings.dart';
+import '../services/media_service.dart';
 import '../services/metadata_service.dart';
 import '../services/notification_service.dart';
 import '../services/presence_service.dart';
@@ -60,6 +61,7 @@ class RadioPlayerModel extends ChangeNotifier {
       ),
     ),
   );
+  MediaService? _mediaService;
   MetadataService? _metadataInstance;
   MetadataService get _metadata => _metadataInstance ??= MetadataService();
 
@@ -93,6 +95,12 @@ class RadioPlayerModel extends ChangeNotifier {
     _player.playingStream.listen((playing) {
       _metadata.streamPlaying = playing;
     });
+    _mediaService = await MediaService.start(
+      player: _player,
+      onPlay: play,
+      onStop: stop,
+    );
+    _showSongInNotification();
     try {
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
@@ -253,9 +261,13 @@ class RadioPlayerModel extends ChangeNotifier {
     _currentArtist = artist;
     _isFetchingCurrentSong = false;
     _recentSongs.remove(currentSongDisplay);
+    _showSongInNotification();
     _countCurrentSong();
     notifyListeners();
   }
+
+  void _showSongInNotification() =>
+      _mediaService?.showSong(title: _currentSong, artist: _currentArtist);
 
   final List<String> _recentSongs = [];
 

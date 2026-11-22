@@ -16,6 +16,7 @@ Colors, font and style come from [radiofeniks.com](https://radiofeniks.com): Lex
 
 - **Live radio**
   - Now-playing title, with a sound wave in the header while it plays. Volume is left to the phone's buttons.
+  - Keeps playing in the background and with the screen off, with the song and a pause button in the Android notification and on its lock screen. A paused radio can be started again from there for 10 minutes.
   - The song updates instantly from the stream while playing, and every 3 s from the Icecast status page when stopped.
   - Upload labels such as "(Official Video)" or "HD" are removed from titles.
   - Studio announcements with the phone number are shown with "Feniks Radio" as the artist and cannot be saved.
